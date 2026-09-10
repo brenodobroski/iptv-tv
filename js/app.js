@@ -3,6 +3,9 @@
    - Pôsteres/backdrops/títulos do TMDB (cache 7 dias)
    - Busca abre o teclado NATIVO da TV (input focado, sem teclado virtual)
    - Ao vivo via hls.js: buffer grande elimina o travamento "imagem a imagem"
+   - Player sem controls nativo:
+       • TV ao vivo  -> NENHUMA barra (só assiste; Voltar sai)
+       • Filmes/séries -> play/pause, ±10s, progresso (sem volume/tela cheia)
    ============================================================ */
 'use strict';
 
@@ -22,6 +25,7 @@ let mediaAtual = null;
 let videoAtual = null;
 let buscaAberta = false;
 let hls = null;                 // instância do hls.js (HLS ao vivo)
+let controlesTimer = null;      // esconde a barra de controles após inatividade
 
 function destruirHls() {
   if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
@@ -282,7 +286,6 @@ function renderizarHome() {
         '<div class="cont-barra"><i style="width:' + pct + '%"></i></div>';
       card.addEventListener('click', () => abrirPlayer(item.url, item));
       row.appendChild(card);
-      // capa do TMDB quando disponível
       if (item.aba && item.aba !== 'live') {
         buscarTMDB(item.name.split(' — ')[0], item.aba).then(info => {
           const el = card.querySelector('img');
@@ -454,7 +457,6 @@ function criarCard(item) {
     abrirDetalhes(id, secaoAtual);
   });
 
-  // TMDB: troca o poster pela arte oficial + adiciona ano
   enriquecerCard(card, item);
   return card;
 }
@@ -635,7 +637,6 @@ function abrirDetalhes(id, secao) {
   }
   atualizarBotaoFavDetail();
 
-  // TMDB: backdrop, poster oficial, título limpo, nota, ano e sinopse
   buscarTMDB(item.name, secao).then(info => {
     if (!info || !mediaAtual || mediaAtual.id !== (item.series_id || item.stream_id)) return;
     if (info.backdrop) $('detail-bg').style.backgroundImage = 'url(' + info.backdrop + ')';
@@ -786,6 +787,12 @@ function abrirPlayer(url, dados) {
 
   mostrarTela('screen-player');
   video.focus();
+  video.volume = 1; // volume sempre no máximo; ajuste é feito na TV
+
+  // TV ao vivo: NENHUM controle na tela
+  // Filmes/séries: barra customizada (play/pause, ±10s, progresso)
+  if (dados.aba === 'live') $('player-controls').classList.add('hidden');
+  else mostrarControles();
 
   destruirHls();
   const urlFinal = montarUrlProxy(url);
@@ -868,6 +875,7 @@ function registrarProgresso() {
 function sairDoPlayer() {
   registrarProgresso();
   forcarPararVideo();
+  esconderControles();
   videoAtual = null;
   if (telaAntesDoPlayer === 'screen-detail') {
     mostrarTela('screen-detail');
@@ -914,6 +922,67 @@ function toast(msg) {
   el.classList.add('visivel');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('visivel'), 2500);
+}
+
+/* ============================================================
+   CONTROLES DO PLAYER (filmes/séries — nunca ao vivo)
+   ============================================================ */
+function mostrarControles() {
+  // Ao vivo não tem barra de controle nunca
+  if (!videoAtual || videoAtual.aba === 'live') return;
+  $('player-controls').classList.remove('hidden');
+  // Esconde sozinha após 6s sem interação
+  clearTimeout(controlesTimer);
+  controlesTimer = setTimeout(() => $('player-controls').classList.add('hidden'), 6000);
+}
+
+function esconderControles() {
+  clearTimeout(controlesTimer);
+  $('player-controls').classList.add('hidden');
+}
+
+function alternarPlayPause() {
+  const video = $('video');
+  if (!video) return;
+  if (video.paused) video.play().catch(() => {});
+  else video.pause();
+  mostrarControles();
+}
+
+function voltar10() {
+  const video = $('video');
+  if (!video || !video.duration) return;
+  video.currentTime = Math.max(0, video.currentTime - 10);
+  mostrarControles();
+}
+
+function avancar10() {
+  const video = $('video');
+  if (!video || !video.duration) return;
+  video.currentTime = Math.min(video.duration, video.currentTime + 10);
+  mostrarControles();
+}
+
+function formatarTempo(seg) {
+  if (!seg || !isFinite(seg)) return '0:00';
+  const s = Math.floor(seg % 60);
+  const m = Math.floor(seg / 60) % 60;
+  const h = Math.floor(seg / 3600);
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  const ss = String(s).padStart(2, '0');
+  return (h > 0 ? h + ':' : '') + mm + ':' + ss;
+}
+
+function atualizarBarraControles() {
+  if (!videoAtual || videoAtual.aba === 'live') return;
+  const video = $('video');
+  if (!video) return;
+  const dur = video.duration;
+  if (dur && isFinite(dur)) {
+    $('pc-progresso').style.width = Math.min(100, (video.currentTime / dur) * 100) + '%';
+    $('pc-total').textContent = formatarTempo(dur);
+  }
+  $('pc-atual').textContent = formatarTempo(video.currentTime);
 }
 
 /* ============================================================
@@ -1046,11 +1115,27 @@ document.addEventListener('keydown', (e) => {
   }
 
   const mapa = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
-  if (mapa[e.key]) {
-    if (!$('screen-player').classList.contains('active')) {
-      e.preventDefault();
-      moverFoco(mapa[e.key]);
+
+  // ---- DENTRO DO PLAYER ----
+  if ($('screen-player').classList.contains('active')) {
+    const ehVod = videoAtual && videoAtual.aba !== 'live';
+    // Ao vivo: setas/OK não fazem NADA (só assiste; Voltar sai)
+    if (!ehVod) return;
+    e.preventDefault();
+    mostrarControles();
+    if (e.key === 'Enter' || e.keyCode === 13) alternarPlayPause();
+    else if (e.key === 'ArrowLeft') voltar10();
+    else if (e.key === 'ArrowRight') avancar10();
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if ($('player-controls').classList.contains('hidden')) mostrarControles();
+      else esconderControles();
     }
+    return;
+  }
+
+  if (mapa[e.key]) {
+    e.preventDefault();
+    moverFoco(mapa[e.key]);
     return;
   }
 
@@ -1148,6 +1233,10 @@ function iniciar() {
   });
   $('btn-voltar-player').addEventListener('click', sairDoPlayer);
   $('btn-proximo-ep').addEventListener('click', tocarProximoEpisodio);
+  // Controles customizados (filmes/séries)
+  $('btn-playpause').addEventListener('click', alternarPlayPause);
+  $('btn-rew').addEventListener('click', voltar10);
+  $('btn-fwd').addEventListener('click', avancar10);
 
   const video = $('video');
   video.addEventListener('error', () => {
@@ -1160,7 +1249,23 @@ function iniciar() {
     $('player-erro').classList.add('hidden');
   });
   video.addEventListener('timeupdate', () => {
+    atualizarBarraControles();
     if (video.duration && video.currentTime > 5) registrarProgresso();
+  });
+  video.addEventListener('play', () => {
+    $('icon-play').classList.add('hidden');
+    $('icon-pause').classList.remove('hidden');
+  });
+  video.addEventListener('pause', () => {
+    $('icon-play').classList.remove('hidden');
+    $('icon-pause').classList.add('hidden');
+  });
+  video.addEventListener('click', () => {
+    // clique/toque: alterna a barra (somente filmes/séries)
+    if (videoAtual && videoAtual.aba !== 'live') {
+      if ($('player-controls').classList.contains('hidden')) mostrarControles();
+      else esconderControles();
+    }
   });
   video.addEventListener('ended', () => {
     registrarProgresso();

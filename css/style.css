@@ -466,6 +466,37 @@ button:focus-visible, input:focus-visible, li[tabindex]:focus-visible {
 /* ============ PLAYER ============ */
 #screen-player { background: #000; }
 #video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+
+/* ---- barra de controles customizada (filmes/séries apenas) ---- */
+.player-controls {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 18px;
+  padding: 26px 40px 22px;
+  background: linear-gradient(to top, rgba(0,0,0,.92) 40%, transparent);
+  z-index: 5;
+}
+.pc-btn {
+  flex-shrink: 0;
+  width: 62px; height: 62px;
+  border-radius: 50%;
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s ease, transform .12s ease;
+}
+.pc-btn:hover { background: var(--accent); transform: scale(1.06); }
+.pc-btn svg { width: 28px; height: 28px; fill: #fff; }
+.pc-progresso-wrap { flex: 1; min-width: 0; }
+.pc-barra {
+  height: 5px;
+  background: rgba(255,255,255,.22);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.pc-barra i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
+.pc-time { color: var(--text-2); font-size: 16px; font-variant-numeric: tabular-nums; }
+
 .player-carregando {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
