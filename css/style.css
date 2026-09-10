@@ -331,7 +331,9 @@ button:focus-visible, input:focus-visible, li[tabindex]:focus-visible {
   overflow: hidden;
   background: var(--bg-3);
   border: 1px solid var(--border);
-  aspect-ratio: 2 / 3;
+  /* Altura FIXA: não usar aspect-ratio, pois navegadores antigos de TV
+     ignoram essa propriedade e o card colapsa, ficando amassado/sobreposto */
+  height: 300px;
   padding: 0;
   transition: transform .15s ease, box-shadow .15s ease;
 }
@@ -524,6 +526,7 @@ button:focus-visible, input:focus-visible, li[tabindex]:focus-visible {
   .sidebar { flex-basis: 270px; }
   .epg-panel { flex-basis: 340px; }
   .items-container { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+  .card { height: 240px; }
   .detail-grid { gap: 28px; }
   .detail-poster { flex-basis: 240px; width: 240px; }
   .detail-info h2 { font-size: 32px; }

@@ -2,6 +2,7 @@
    Meu IPTV — versão TV com visual web (azul) + TMDB
    - Pôsteres/backdrops/títulos do TMDB (cache 7 dias)
    - Busca abre o teclado NATIVO da TV (input focado, sem teclado virtual)
+   - Ao vivo via hls.js: buffer grande elimina o travamento "imagem a imagem"
    ============================================================ */
 'use strict';
 
@@ -20,6 +21,11 @@ let canalSelecionado = null;
 let mediaAtual = null;
 let videoAtual = null;
 let buscaAberta = false;
+let hls = null;                 // instância do hls.js (HLS ao vivo)
+
+function destruirHls() {
+  if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
+}
 
 /* ---------------- TMDB ---------------- */
 const TMDB_KEY = 'c5ec5dbd66ea50ce62b096dca322543c';
@@ -593,7 +599,6 @@ function assistirCanal(item) {
   abrirPlayer(url, { id: item.stream_id, name: item.name, url, aba: 'live', logo: item.stream_icon });
 }
 
-
 /* ============================================================
    TELA DE DETALHES (com backdrop/título/sinopse do TMDB)
    ============================================================ */
@@ -782,7 +787,40 @@ function abrirPlayer(url, dados) {
   mostrarTela('screen-player');
   video.focus();
 
-  video.src = montarUrlProxy(url);
+  destruirHls();
+  const urlFinal = montarUrlProxy(url);
+  const ehHls = urlFinal.indexOf('.m3u8') !== -1;
+
+  if (ehHls && window.Hls && Hls.isSupported()) {
+    /* HLS via MSE (Chrome, Firefox, Tizen 3+): buffer grande faz o download
+       dos segmentos À FRENTE da reprodução, disfarçando a latência do proxy
+       (sem isso, o buffer esvazia a cada segmento e o vídeo fica passando
+       "uma imagem, depois outra"). */
+    hls = new Hls({
+      maxBufferLength: 60,
+      maxMaxBufferLength: 120,
+      liveSyncDurationCount: 5,
+      maxLiveSyncPlaybackRate: 1.3,
+      fragLoadingMaxRetry: 8,
+      manifestLoadingMaxRetry: 4,
+      levelLoadingMaxRetry: 4
+    });
+    hls.loadSource(urlFinal);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR, (evento, data) => {
+      if (!hls || !data.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        hls.startLoad();
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        hls.recoverMediaError();
+      } else {
+        mostrarErroPlayer();
+      }
+    });
+  } else {
+    // Fallback: HLS nativo (Safari / algumas TVs) ou MP4 direto
+    video.src = urlFinal;
+  }
 
   const hist = historico[dados.id];
   const aoCarregar = () => {
@@ -794,6 +832,13 @@ function abrirPlayer(url, dados) {
   };
   video.addEventListener('loadedmetadata', aoCarregar);
   video.play().catch(() => {});
+}
+
+function mostrarErroPlayer() {
+  $('player-carregando').classList.add('hidden');
+  $('player-erro-msg').textContent = 'Não foi possível reproduzir.';
+  $('player-erro').classList.remove('hidden');
+  focarPrimeiro($('player-erro'));
 }
 
 function registrarProgresso() {
@@ -836,6 +881,7 @@ function sairDoPlayer() {
 }
 
 function forcarPararVideo() {
+  destruirHls();
   const video = $('video');
   if (!video) return;
   video.pause();
@@ -1106,10 +1152,7 @@ function iniciar() {
   const video = $('video');
   video.addEventListener('error', () => {
     if (!videoAtual) return;
-    $('player-carregando').classList.add('hidden');
-    $('player-erro-msg').textContent = 'Não foi possível reproduzir.';
-    $('player-erro').classList.remove('hidden');
-    focarPrimeiro($('player-erro'));
+    mostrarErroPlayer();
   });
   video.addEventListener('waiting', () => $('player-carregando').classList.remove('hidden'));
   video.addEventListener('playing', () => {
