@@ -1,388 +1,520 @@
-// O Service Worker antigo (sw.js) estava interceptando TODA requisição da página — inclusive
-// as imagens do TMDB e as chamadas de catálogo — e quebrando algumas delas (erros
-// "net::ERR_FAILED" nas imagens, filmes/séries não carregando). Ele não fazia cache nem
-// trazia nenhum benefício real, só repassava tudo sem necessidade. Em vez de registrar um
-// novo, agora ativamente REMOVEMOS qualquer Service Worker que ainda esteja instalado no
-// navegador de quem já visitou o site antes — sem isso, a versão antiga continuaria
-// controlando a página (e quebrando as mesmas coisas) até a pessoa limpar os dados do site
-// manualmente, mesmo depois de você atualizar os arquivos na Vercel.
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(registros => {
-        registros.forEach(registro => registro.unregister());
-    });
-}
+/* ============================================================
+   Meu IPTV — versão TV
+   App leve para Smart TVs antigas: sem video.js, sem TMDB,
+   navegação 100% por controle remoto (D-pad, OK, Voltar).
+   ============================================================ */
+'use strict';
 
-// Variáveis Globais de Estado
+const $ = id => document.getElementById(id);
+
+/* ---------------- ESTADO GLOBAL ---------------- */
 let credenciais = { host: '', user: '', pass: '' };
-let abaAtiva = 'home';
-let currentCatId = null;
-let lastViewBeforePlayer = 'home';
-
 let db = { live: [], vod: [], series: [] };
 let cats = { live: [], vod: [], series: [] };
-let catMaps = { live: {}, vod: {}, series: {} };
 let dataLoaded = false;
-let bannerInterval = null;
-let mediaAtivaObj = null;
 
-// Loaders do LocalStorage
-let savedFavs = JSON.parse(localStorage.getItem('iptv_api_favs_v3'));
-if (!savedFavs || Array.isArray(savedFavs) || !savedFavs.live) {
-    savedFavs = { live: [], vod: [], series: [] };
+let secaoAtual = 'home';        // home | live | vod | series
+let catAtual = null;            // categoria selecionada no browse
+let dadosAtuais = [];           // itens exibidos no browse
+let canalSelecionado = null;    // canal com mini-preview (ao vivo)
+let mediaAtual = null;          // objeto de mídia aberto na tela de detalhes
+let videoAtual = null;          // metadados do vídeo em reprodução
+
+/* ---------------- ARMAZENAMENTO (mesmas chaves da versão antiga) ---------------- */
+function carregarJSON(chave, padrao) {
+  try { return JSON.parse(localStorage.getItem(chave)) || padrao; }
+  catch (e) { return padrao; }
 }
-let favoritos = savedFavs;
-
-let historicoAssistidos = JSON.parse(localStorage.getItem('iptv_api_history')) || {};
-let videoEmReproducao = null;
-
-// ================== EPISÓDIOS/FILMES JÁ ASSISTIDOS POR COMPLETO ==================
-// `historicoAssistidos` guarda só o PROGRESSO de quem parou no meio (usado pra
-// "Continuar Assistindo"), e é APAGADO de lá quando o vídeo passa de 95% —
-// por isso quem assiste um episódio inteiro nunca aparecia marcado em lugar
-// nenhum. Este é um registro À PARTE, que só cresce (nunca é removido), usado
-// exclusivamente pra mostrar "✓ Assistido" na lista de episódios.
-let episodiosCompletos = new Set();
-try {
-    const salvos = JSON.parse(localStorage.getItem('iptv_api_completos')) || [];
-    episodiosCompletos = new Set(salvos.map(String));
-} catch (e) { episodiosCompletos = new Set(); }
-
-function marcarComoCompleto(id) {
-    if (id === undefined || id === null) return;
-    episodiosCompletos.add(String(id));
-    try { localStorage.setItem('iptv_api_completos', JSON.stringify(Array.from(episodiosCompletos))); } catch (e) { /* storage cheio, ignora */ }
+let favoritos = carregarJSON('iptv_api_favs_v3', null);
+if (!favoritos || Array.isArray(favoritos) || !favoritos.live) {
+  favoritos = { live: [], vod: [], series: [] };
 }
-window.marcarComoCompleto = marcarComoCompleto;
-window.episodiosCompletos = episodiosCompletos;
+let historico = carregarJSON('iptv_api_history', {});
+let completados = new Set(carregarJSON('iptv_api_completos', []).map(String));
 
-// Fallbacks de Imagem
-//
-// BUG CORRIGIDO: a versão anterior montava a data URI manualmente com aspas
-// simples dentro do SVG (xmlns='...', width='200'...). Essa URL depois é
-// injetada dentro de atributos HTML inline tipo onerror="algumaFuncao(this,
-// '${fallbackSvg}')" — que TAMBÉM usa aspas simples pra delimitar o argumento.
-// Resultado: assim que o navegador encontrava a primeira aspas simples do
-// SVG, ele achava que o argumento da função tinha terminado ali, e o resto
-// virava lixo sintático — daí o erro "missing ) after argument list" no
-// console (aparecendo como vindo de "(index):1", já que é um atributo inline
-// do próprio HTML, não de um arquivo .js).
-// A correção: gerar o SVG com aspas DUPLAS (sintaxe válida em SVG/XML) e
-// então rodar tudo por encodeURIComponent, que converte QUALQUER aspas,
-// símbolo ou caractere especial em sequência %XX — não sobra nenhuma aspas
-// literal na string final, então ela pode ser injetada com segurança dentro
-// de qualquer atributo HTML, com aspas simples ou duplas.
-const getFallbackSvg = (tipo) => {
-    const svgCru = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="300"><rect width="100%" height="100%" fill="#121214"/><text x="50%" y="50%" fill="#3f3f46" font-family="sans-serif" font-size="20" font-weight="bold" text-anchor="middle" dy=".3em">${tipo}</text></svg>`;
-    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgCru)}`;
-};
-const imagensQuebradas = new Set();
-
-window.marcarImagemQuebrada = function(imgElement, fallbackSvg) {
-    const originalUrl = imgElement.getAttribute('data-original');
-    if (originalUrl) imagensQuebradas.add(originalUrl);
-    imgElement.onerror = null;
-    imgElement.src = fallbackSvg;
-};
-
-// --- CACHE DO TMDB (evita refazer as mesmas 2 requisições toda vez que a Home/detalhes renderizam) ---
-const TMDB_CACHE_KEY = 'iptv_tmdb_cache_v1';
-const TMDB_CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 dias, dados do TMDB raramente mudam
-let tmdbCache = {};
-try { tmdbCache = JSON.parse(localStorage.getItem(TMDB_CACHE_KEY)) || {}; } catch (e) { tmdbCache = {}; }
-
-function salvarTmdbCache() {
-    try { localStorage.setItem(TMDB_CACHE_KEY, JSON.stringify(tmdbCache)); } catch (e) { /* storage cheio, ignora */ }
+function salvarFavoritos() {
+  try { localStorage.setItem('iptv_api_favs_v3', JSON.stringify(favoritos)); } catch (e) {}
+}
+function salvarHistorico() {
+  try { localStorage.setItem('iptv_api_history', JSON.stringify(historico)); } catch (e) {}
+}
+function marcarCompleto(id) {
+  completados.add(String(id));
+  try { localStorage.setItem('iptv_api_completos', JSON.stringify(Array.from(completados))); } catch (e) {}
 }
 
-// --- TMDB API INTEGRAÇÃO ---
-async function buscarTMDB(nomeOriginal, tipo) {
-    const apiKey = 'c5ec5dbd66ea50ce62b096dca322543c';
-    const endpoint = tipo === 'series' ? 'tv' : 'movie';
-    
-    let nomeLimpo = nomeOriginal
-        .replace(/\[.*?\]|\(.*?\)/g, '') 
-        .split('-')[0] 
-        .replace(/4K|FHD|HD|UHD|VOD|Dublado|Legendado|Dual|Audio/gi, '') 
-        .trim();
-        
-    if(!nomeLimpo) return null;
+/* ---------------- FALLBACK DE IMAGEM (SVG embutido, sem requisição) ---------------- */
+const SVG_FALLBACK = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="300"><rect width="100%" height="100%" fill="#1d1d24"/><text x="50%" y="50%" fill="#52525b" font-family="sans-serif" font-size="22" font-weight="bold" text-anchor="middle">Sem imagem</text></svg>'
+);
+window.imgErro = el => { el.onerror = null; el.src = SVG_FALLBACK; };
 
-    const cacheKey = `${endpoint}:${nomeLimpo.toLowerCase()}`;
-    const cached = tmdbCache[cacheKey];
-    if (cached && (Date.now() - cached.t) < TMDB_CACHE_TTL) {
-        return cached.v; // pode ser null (já sabemos que não achou) — evita bater na API de novo
-    }
-        
-    let searchUrl = `https://api.themoviedb.org/3/search/${endpoint}?api_key=${apiKey}&query=${encodeURIComponent(nomeLimpo)}&language=pt-BR`;
-    
-    let resultado = null;
-    try {
-        const res = await fetch(searchUrl);
-        const data = await res.json();
-        
-        if (data.results && data.results.length > 0) {
-            const result = data.results[0];
-            let logoUrl = null;
-            const imagesUrl = `https://api.themoviedb.org/3/${endpoint}/${result.id}/images?api_key=${apiKey}&include_image_language=pt,en,null`;
-            const imgRes = await fetch(imagesUrl);
-            const imgData = await imgRes.json();
-            
-            if (imgData.logos && imgData.logos.length > 0) {
-                logoUrl = `https://image.tmdb.org/t/p/w500${imgData.logos[0].file_path}`;
-            }
-            
-            resultado = {
-                id: result.id,
-                titulo: result.title || result.name,
-                sinopse: result.overview,
-                nota: result.vote_average ? result.vote_average.toFixed(1) : null,
-                backdrop: result.backdrop_path ? `https://image.tmdb.org/t/p/original${result.backdrop_path}` : null,
-                poster: result.poster_path ? `https://image.tmdb.org/t/p/w500${result.poster_path}` : null,
-                logo: logoUrl,
-                ano: result.release_date ? result.release_date.substring(0, 4) : (result.first_air_date ? result.first_air_date.substring(0, 4) : '')
-            };
-        }
-    } catch (e) { console.error("Erro TMDB:", e); return null; /* erro de rede não vira cache */ }
-
-    tmdbCache[cacheKey] = { v: resultado, t: Date.now() };
-    salvarTmdbCache();
-    return resultado;
+/* ---------------- API (Xtream Codes via proxy do próprio deploy) ---------------- */
+function montarUrlProxy(url) {
+  const host = location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return 'http://localhost:8000/api/proxy?url=' + encodeURIComponent(url);
+  }
+  return '/api/proxy?url=' + encodeURIComponent(url);
 }
-
-// LÓGICA DE API DO SEU SERVIDOR / VERCEL
-//
-// IMPORTANTE: antes apontávamos sempre para um domínio de PRODUÇÃO fixo
-// ("breno-iptv.vercel.app"). Isso causa um bug sutil e grave: se você testar o
-// app por uma URL de PREVIEW (a Vercel gera uma nova a cada deploy, tipo
-// "iptv-xxxxx-seuprojeto.vercel.app"), o HTML/JS carregado é o do preview
-// (código novo), mas as chamadas de API e vídeo continuavam batendo no domínio
-// de produção antigo — que podia estar rodando uma versão DIFERENTE e mais
-// antiga do main.py. Front e back ficam dessincronizados, e os sintomas são
-// exatamente esses: parte funciona, parte dá 404/CORS sem explicação aparente.
-//
-// Como o vercel.json já reescreve "/api/*" para dentro do MESMO deployment
-// (mesma origem), a forma correta é usar caminho RELATIVO. Assim, não importa
-// se você está testando um preview, a produção, ou rodando localmente com o
-// backend embutido: o front sempre fala com o backend do MESMO deployment que
-// o serviu, garantindo que os dois estão sempre na mesma versão.
-function montarUrlProxy(targetUrl) {
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return `http://localhost:8000/api/proxy?url=${encodeURIComponent(targetUrl)}`;
-    }
-    return `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
-}
-window.montarUrlProxy = montarUrlProxy;
 
 async function fetchAPI(action, params = '') {
-    const targetUrl = `${credenciais.host}/player_api.php?username=${credenciais.user}&password=${credenciais.pass}&action=${action}${params}`;
-    const proxyUrl = montarUrlProxy(targetUrl);
-    const response = await fetch(proxyUrl);
-    if (!response.ok) throw new Error('Erro na rede');
-    return await response.json();
+  const alvo = credenciais.host + '/player_api.php?username=' + credenciais.user +
+               '&password=' + credenciais.pass + '&action=' + action + params;
+  const resp = await fetch(montarUrlProxy(alvo));
+  if (!resp.ok) throw new Error('erro_rede');
+  return resp.json();
 }
 
-// --- CACHE DO CATÁLOGO (stale-while-revalidate) ---
-// Ideia: se já temos um catálogo salvo, mostramos ele NA HORA (0ms de espera) e
-// atualizamos os dados em segundo plano. Só mostramos o loader gigante quando
-// não existe nenhum cache ainda (primeiro login no aparelho).
-const CATALOG_CACHE_KEY = 'iptv_catalog_cache_v1';
-const CATALOG_CACHE_MAX_AGE = 1000 * 60 * 60 * 12; // depois de 12h o cache é descartado (não só atualizado)
+/* ---------------- CACHE DE CATÁLOGO ---------------- */
+const CHAVE_CACHE = 'iptv_catalog_cache_v1';
+const CACHE_MAX = 12 * 60 * 60 * 1000; // 12h
 
 function lerCacheCatalogo() {
-    try {
-        const raw = localStorage.getItem(CATALOG_CACHE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (!parsed || !parsed.timestamp || !parsed.db || !parsed.cats) return null;
-        if (Date.now() - parsed.timestamp > CATALOG_CACHE_MAX_AGE) return null;
-        // O cache é por usuário/host, pra não misturar contas diferentes no mesmo navegador
-        if (parsed.host !== credenciais.host || parsed.user !== credenciais.user) return null;
-        return parsed;
-    } catch (e) { return null; }
+  try {
+    const bruto = localStorage.getItem(CHAVE_CACHE);
+    if (!bruto) return null;
+    const cache = JSON.parse(bruto);
+    if (!cache || !cache.db || !cache.cats) return null;
+    if (Date.now() - cache.timestamp > CACHE_MAX) return null;
+    if (cache.host !== credenciais.host || cache.user !== credenciais.user) return null;
+    return cache;
+  } catch (e) { return null; }
 }
 
 function salvarCacheCatalogo() {
-    try {
-        localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({
-            timestamp: Date.now(),
-            host: credenciais.host,
-            user: credenciais.user,
-            db, cats
-        }));
-    } catch (e) { /* catálogo muito grande pro localStorage, sem problema, só não cacheia */ }
+  try {
+    localStorage.setItem(CHAVE_CACHE, JSON.stringify({
+      timestamp: Date.now(), host: credenciais.host, user: credenciais.user, db, cats
+    }));
+  } catch (e) {}
 }
 
 function aplicarCatalogo(novoDb, novosCats) {
-    db.live = novoDb.live; db.vod = novoDb.vod; db.series = novoDb.series;
-    cats.live = novosCats.live; cats.vod = novosCats.vod; cats.series = novosCats.series;
-
-    catMaps.live = {}; catMaps.vod = {}; catMaps.series = {};
-    cats.live.forEach(c => catMaps.live[c.category_id] = c.category_name);
-    cats.vod.forEach(c => catMaps.vod[c.category_id] = c.category_name);
-    cats.series.forEach(c => catMaps.series[c.category_id] = c.category_name);
-
-    dataLoaded = true;
+  db.live = novoDb.live || []; db.vod = novoDb.vod || []; db.series = novoDb.series || [];
+  cats.live = novosCats.live || []; cats.vod = novosCats.vod || []; cats.series = novosCats.series || [];
+  dataLoaded = true;
 }
 
-function renderizarViewAtual() {
-    if (abaAtiva === 'home') {
-        definirVisibilidadeCategoryBar(false);
-        renderizarHome();
-    } else if (abaAtiva === 'live') {
-        definirVisibilidadeCategoryBar(false);
-        renderizarCategoriasLiveSidebar();
-        renderizarGrade(db.live, 'live');
-    } else {
-        definirVisibilidadeCategoryBar(true);
-        renderizarCategoriasLista(cats[abaAtiva]);
+async function baixarCatalogo() {
+  const [cLive, sLive, cVod, sVod, cSer, sSer] = await Promise.all([
+    fetchAPI('get_live_categories'), fetchAPI('get_live_streams'),
+    fetchAPI('get_vod_categories'), fetchAPI('get_vod_streams'),
+    fetchAPI('get_series_categories'), fetchAPI('get_series')
+  ]);
+  return {
+    db: { live: sLive, vod: sVod, series: sSer },
+    cats: { live: cLive, vod: cVod, series: cSer }
+  };
+}
+
+function mostrarLoader(texto) {
+  $('loader-texto').textContent = texto || 'Carregando...';
+  $('loader').classList.remove('hidden');
+}
+function esconderLoader() { $('loader').classList.add('hidden'); }
+
+async function carregarCatalogo() {
+  const cache = lerCacheCatalogo();
+  if (cache) {
+    aplicarCatalogo(cache.db, cache.cats);
+    entrarNoMenu();
+    return;
+  }
+  mostrarLoader('Baixando catálogo...');
+  try {
+    const fresco = await baixarCatalogo();
+    aplicarCatalogo(fresco.db, fresco.cats);
+    salvarCacheCatalogo();
+    entrarNoMenu();
+  } catch (e) {
+    esconderLoader();
+    $('login-erro').textContent = 'Falha ao conectar. Verifique DNS, usuário e senha.';
+    mostrarTela('screen-login');
+  }
+}
+
+async function atualizarCatalogo() {
+  const status = $('settings-status');
+  status.textContent = 'Baixando catálogo novo...';
+  try {
+    const fresco = await baixarCatalogo();
+    aplicarCatalogo(fresco.db, fresco.cats);
+    salvarCacheCatalogo();
+    status.textContent = 'Catálogo atualizado!';
+    if (secaoAtual !== 'home') renderizarBrowse();
+  } catch (e) {
+    status.textContent = 'Falha ao atualizar. Tente novamente.';
+  }
+}
+
+/* ---------------- GERENCIADOR DE TELAS ---------------- */
+function mostrarTela(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+function entrarNoMenu() {
+  esconderLoader();
+  secaoAtual = 'home';
+  renderizarHome();
+  mostrarTela('screen-home');
+  focarPrimeiro($('screen-home'));
+}
+
+function irParaSecao(secao) {
+  secaoAtual = secao;
+  catAtual = null;
+  renderizarBrowse();
+  mostrarTela('screen-browse');
+  focarPrimeiro($('screen-browse'));
+}
+
+function voltarMenu() {
+  forcarPararVideo();
+  entrarNoMenu();
+}
+
+/* ============================================================
+   TELA INICIAL
+   ============================================================ */
+function renderizarHome() {
+  // Relógio
+  const agora = new Date();
+  $('home-relogio').textContent =
+    String(agora.getHours()).padStart(2, '0') + ':' + String(agora.getMinutes()).padStart(2, '0');
+
+  // Continuar assistindo (todos os tipos, ordenado por mais recente)
+  const continuar = Object.values(historico).sort((a, b) => b.timestamp - a.timestamp).slice(0, 12);
+  const wrap = $('home-continue');
+  const row = $('home-continue-row');
+  row.innerHTML = '';
+  if (continuar.length === 0) {
+    wrap.classList.add('hidden');
+  } else {
+    wrap.classList.remove('hidden');
+    continuar.forEach(item => {
+      const card = document.createElement('button');
+      card.className = 'cont-card';
+      const img = item.logo || SVG_FALLBACK;
+      const pct = item.percent ? Math.round(item.percent * 100) : 0;
+      card.innerHTML =
+        '<img src="' + img + '" onerror="imgErro(this)" loading="lazy">' +
+        '<div class="cont-nome">' + escapar(item.name) + '</div>' +
+        '<div class="cont-barra"><i style="width:' + pct + '%"></i></div>';
+      card.addEventListener('click', () => abrirPlayer(item.url, item));
+      row.appendChild(card);
+    });
+  }
+}
+
+function escapar(txt) {
+  return String(txt == null ? '' : txt).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* ============================================================
+   TELA DE NAVEGAÇÃO (ao vivo / filmes / séries)
+   ============================================================ */
+function renderizarBrowse() {
+  $('browse-titulo').textContent =
+    secaoAtual === 'live' ? 'TV ao Vivo' : secaoAtual === 'vod' ? 'Filmes' : 'Séries';
+
+  renderizarCategorias();
+  aplicarFiltro();
+
+  const painelEpg = $('epg-panel');
+  if (secaoAtual === 'live') painelEpg.classList.remove('hidden');
+  else painelEpg.classList.add('hidden');
+}
+
+function renderizarCategorias() {
+  const lista = $('cat-list');
+  lista.innerHTML = '';
+
+  if (secaoAtual === 'live') {
+    lista.appendChild(criarItemCat('all', 'Todos os Canais', db.live.length));
+    lista.appendChild(criarItemCat('fav', 'Favoritos', favoritos.live.length));
+    cats.live.forEach(c => {
+      const n = db.live.filter(i => String(i.category_id) === String(c.category_id)).length;
+      lista.appendChild(criarItemCat(c.category_id, c.category_name, n));
+    });
+  } else {
+    const itensHistorico = Object.values(historico).filter(i => i.aba === secaoAtual).length;
+    lista.appendChild(criarItemCat('todos', 'Todos', db[secaoAtual].length));
+    if (itensHistorico > 0) lista.appendChild(criarItemCat('history', 'Continuar Assistindo', itensHistorico));
+    lista.appendChild(criarItemCat('fav', 'Favoritos', favoritos[secaoAtual].length));
+    cats[secaoAtual].forEach(c => {
+      const n = db[secaoAtual].filter(i => String(i.category_id) === String(c.category_id)).length;
+      lista.appendChild(criarItemCat(c.category_id, c.category_name, n));
+    });
+  }
+
+  // Marcar/selecionar a categoria atual (ou a primeira)
+  const alvo = catAtual || (secaoAtual === 'live' ? 'all' : 'todos');
+  const li = lista.querySelector('li[data-id="' + CSS.escape(String(alvo)) + '"]') || lista.firstChild;
+  if (li) li.classList.add('active');
+}
+
+function criarItemCat(id, nome, contagem) {
+  const li = document.createElement('li');
+  li.setAttribute('data-id', id);
+  li.setAttribute('tabindex', '0');
+  li.textContent = nome;
+  if (contagem !== undefined) {
+    const badge = document.createElement('span');
+    badge.className = 'cat-badge';
+    badge.textContent = contagem;
+    li.appendChild(badge);
+  }
+  li.addEventListener('click', () => {
+    catAtual = id;
+    renderizarCategorias();
+    aplicarFiltro();
+    // Move o foco pro primeiro item da grade/lista
+    focarPrimeiroItem();
+  });
+  return li;
+}
+
+let termoBusca = '';
+function aplicarFiltro() {
+  let dados = db[secaoAtual] || [];
+
+  if (secaoAtual === 'live') {
+    if (catAtual === 'fav') dados = dados.filter(i => favoritos.live.includes(i.stream_id));
+    else if (catAtual && catAtual !== 'all') dados = dados.filter(i => String(i.category_id) === String(catAtual));
+  } else {
+    if (catAtual === 'fav') dados = dados.filter(i => favoritos[secaoAtual].includes(i.series_id || i.stream_id));
+    else if (catAtual === 'history') dados = Object.values(historico).filter(i => i.aba === secaoAtual).sort((a, b) => b.timestamp - a.timestamp);
+    else if (catAtual && catAtual !== 'todos') dados = dados.filter(i => String(i.category_id) === String(catAtual));
+  }
+
+  if (termoBusca) {
+    const t = termoBusca.toLowerCase();
+    dados = dados.filter(i => (i.name || '').toLowerCase().includes(t));
+  }
+
+  dadosAtuais = dados;
+  $('browse-info').textContent = dados.length + ' item(ns)' + (termoBusca ? ' para "' + termoBusca + '"' : '');
+
+  if (secaoAtual === 'live') renderizarListaCanais(dados);
+  else renderizarGradeItens(dados);
+}
+
+/* ---- Grade de filmes/séries (renderização em lotes p/ TV antiga) ---- */
+const LOTE = 60;
+let renderToken = 0;
+
+function renderizarGradeItens(dados) {
+  const container = $('items-container');
+  container.className = 'items-container';
+  container.innerHTML = '';
+  cancelarLotes();
+  if (dados.length === 0) {
+    container.innerHTML = '<div class="grid-vazio">Nenhum item encontrado.</div>';
+    return;
+  }
+  const token = ++renderToken;
+  let indice = 0;
+
+  function renderizarLote() {
+    if (token !== renderToken) return; // categoria trocou, aborta
+    const frag = document.createDocumentFragment();
+    const fim = Math.min(indice + LOTE, dados.length);
+    for (let i = indice; i < fim; i++) frag.appendChild(criarCard(dados[i]));
+    container.appendChild(frag);
+    indice = fim;
+  }
+  container._proximoLote = renderizarLote;
+  renderizarLote();
+
+  // Carrega mais lotes conforme rola (com sentinel + IntersectionObserver)
+  const sentinela = document.createElement('div');
+  sentinela.style.height = '2px';
+  container.appendChild(sentinela);
+  container._obs = new IntersectionObserver(entradas => {
+    if (entradas[0].isIntersecting && indice < dados.length) renderizarLote();
+  }, { root: container, rootMargin: '600px' });
+  container._obs.observe(sentinela);
+}
+
+function cancelarLotes() {
+  const container = $('items-container');
+  if (container._obs) { container._obs.disconnect(); container._obs = null; }
+}
+
+function criarCard(item) {
+  const id = item.series_id || item.stream_id;
+  const ehFav = favoritos[secaoAtual].includes(id);
+  const hist = historico[id];
+  const card = document.createElement('button');
+  card.className = 'card';
+  card.setAttribute('data-id', id);
+  const img = item.stream_icon || item.cover || SVG_FALLBACK;
+
+  let progresso = '';
+  if (hist && hist.percent && hist.percent < 0.95) {
+    progresso = '<div class="card-progress"><i style="width:' + Math.round(hist.percent * 100) + '%"></i></div>';
+  }
+
+  card.innerHTML =
+    '<img src="' + img + '" onerror="imgErro(this)" loading="lazy">' +
+    '<span class="card-fav' + (ehFav ? ' is-fav' : '') + '">' +
+      '<svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>' +
+    '</span>' + progresso +
+    '<div class="card-nome">' + escapar(item.name) + '</div>';
+
+  card.addEventListener('click', e => {
+    // Clique na estrela = favoritar; no resto = abrir detalhes
+    if (e.target.closest('.card-fav')) {
+      alternarFavorito(id, secaoAtual, card);
+      return;
     }
+    abrirDetalhes(id, secaoAtual);
+  });
+  return card;
 }
 
-async function baixarCatalogoDaRede() {
-    const [cLive, sLive, cVod, sVod, cSeries, sSeries] = await Promise.all([
-        fetchAPI('get_live_categories'), fetchAPI('get_live_streams'),
-        fetchAPI('get_vod_categories'), fetchAPI('get_vod_streams'),
-        fetchAPI('get_series_categories'), fetchAPI('get_series')
-    ]);
-    return {
-        db: { live: sLive, vod: sVod, series: sSeries },
-        cats: { live: cLive, vod: cVod, series: cSeries }
-    };
+function alternarFavorito(id, secao, cardEl) {
+  const lista = favoritos[secao];
+  const idx = lista.indexOf(id);
+  if (idx >= 0) lista.splice(idx, 1); else lista.push(id);
+  salvarFavoritos();
+  if (cardEl) {
+    const estrela = cardEl.querySelector('.card-fav');
+    if (estrela) estrela.classList.toggle('is-fav', idx < 0);
+  }
+  // Se estiver vendo a lista de favoritos, recarrega
+  if (catAtual === 'fav') { renderizarCategorias(); aplicarFiltro(); }
+  else renderizarCategorias(); // atualiza contagem
+  if (mediaAtual && (mediaAtual.id === id)) atualizarBotaoFavDetail();
 }
 
-async function carregarCatalogoCompleto() {
-    const cache = lerCacheCatalogo();
+/* ---- Lista de canais ao vivo ---- */
+const epgFila = [];
+let epgRodando = 0;
+const EPG_MAX = 2;
 
-    if (cache) {
-        // Mostra o cache imediatamente — sem esperar nem gastar chamada nenhuma
-        // na API do provedor. A atualização agora só acontece quando o usuário
-        // clica no botão "Atualizar" (ver atualizarCatalogoManual), pra não ficar
-        // batendo no player_api.php toda vez que o app é aberto.
-        aplicarCatalogo(cache.db, cache.cats);
-        document.getElementById('global-loader').style.display = 'none';
-        switchView(abaAtiva === 'home' ? 'home-view' : 'grid-view');
-        renderizarViewAtual();
-        return;
-    }
+function renderizarListaCanais(dados) {
+  const container = $('items-container');
+  container.className = 'items-container lista-canais';
+  container.innerHTML = '';
+  cancelarLotes();
+  if (dados.length === 0) {
+    container.innerHTML = '<div class="grid-vazio">Nenhum canal encontrado.</div>';
+    return;
+  }
+  const token = ++renderToken;
+  let indice = 0;
 
-    // Sem cache (primeira vez no aparelho) — precisa mostrar o loader mesmo
-    document.getElementById('global-loader').style.display = 'flex';
-    try {
-        const fresh = await baixarCatalogoDaRede();
-        aplicarCatalogo(fresh.db, fresh.cats);
-        salvarCacheCatalogo();
+  function renderizarLote() {
+    if (token !== renderToken) return;
+    const frag = document.createDocumentFragment();
+    const fim = Math.min(indice + 90, dados.length);
+    for (let i = indice; i < fim; i++) frag.appendChild(criarLinhaCanal(dados[i]));
+    container.appendChild(frag);
+    indice = fim;
+  }
+  container._proximoLote = renderizarLote;
+  renderizarLote();
 
-        document.getElementById('global-loader').style.display = 'none';
-        if (abaAtiva === 'home') renderizarHome();
-        else {
-            definirVisibilidadeCategoryBar(true);
-            renderizarCategoriasLista(cats[abaAtiva]);
-            switchView('grid-view');
+  const sentinela = document.createElement('div');
+  sentinela.style.height = '2px';
+  container.appendChild(sentinela);
+  container._obs = new IntersectionObserver(entradas => {
+    if (entradas[0].isIntersecting && indice < dados.length) renderizarLote();
+  }, { root: container, rootMargin: '800px' });
+  container._obs.observe(sentinela);
+}
+
+function criarLinhaCanal(item) {
+  const id = item.stream_id;
+  const row = document.createElement('button');
+  row.className = 'canal-row';
+  row.setAttribute('data-id', id);
+  const img = item.stream_icon || SVG_FALLBACK;
+  row.innerHTML =
+    '<img src="' + img + '" onerror="imgErro(this)" loading="lazy">' +
+    '<span class="canal-nome">' + escapar(item.name) + '</span>' +
+    '<span class="canal-prog" id="prog-' + id + '">Programação...</span>';
+
+  row.addEventListener('click', () => {
+    document.querySelectorAll('.canal-row.selected').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+    assistirCanal(item);
+  });
+
+  // Ao receber foco, mostra o EPG do canal no painel lateral
+  row.addEventListener('focus', () => { agendarEpg(id, item.name); });
+  return row;
+}
+
+let epgTimer = null;
+function agendarEpg(id, nome) {
+  clearTimeout(epgTimer);
+  epgTimer = setTimeout(() => mostrarEpgCanal(id, nome), 350);
+}
+
+function mostrarEpgCanal(id, nome) {
+  if (secaoAtual !== 'live') return;
+  $('epg-canal').textContent = nome;
+  $('epg-conteudo').textContent = 'Carregando programação...';
+  epgFila.push({ id, nome });
+  processarFilaEpg();
+}
+
+async function processarFilaEpg() {
+  if (epgRodando >= EPG_MAX || epgFila.length === 0) return;
+  const pedido = epgFila.pop();           // pega o mais recente
+  epgFila.length = 0;                     // descarta os antigos (foco já mudou)
+  epgRodando++;
+  try {
+    const data = await fetchAPI('get_short_epg', '&stream_id=' + pedido.id);
+    // Só mostra se o foco ainda é o mesmo canal
+    if ($('epg-canal').textContent !== pedido.nome) return;
+    const caixa = $('epg-conteudo');
+    if (data && data.epg_listings && data.epg_listings.length > 0) {
+      let html = '';
+      data.epg_listings.slice(0, 8).forEach((prog, i) => {
+        const titulo = decodificarEPG(prog.title);
+        const ini = prog.start ? prog.start.split(' ')[1].substring(0, 5) : '';
+        const fim = prog.end ? prog.end.split(' ')[1].substring(0, 5) : '';
+        html += '<div class="epg-prog' + (i === 0 ? ' agora' : '') + '">' +
+                '<div class="epg-hora">' + ini + ' - ' + fim + (i === 0 ? ' • AGORA' : '') + '</div>' +
+                '<div>' + escapar(titulo) + '</div></div>';
+        // Atualiza também a linha do canal na lista
+        if (i === 0) {
+          const mini = $('prog-' + pedido.id);
+          if (mini) mini.textContent = ini + ' ' + titulo;
         }
-    } catch (err) {
-        document.getElementById('global-loader').style.display = 'none';
-        alert("Falha ao baixar o catálogo. Verifique suas credenciais ou seu Proxy Vercel.");
-        document.getElementById('login-screen').style.display = 'flex';
-    }
-}
-
-// Atualização manual do catálogo — chamada quando o usuário clica no botão de
-// refresh. Busca tudo de novo no provedor (pra pegar filmes/séries novos) e
-// substitui o cache. Não usa o loader gigante de tela cheia pra não interromper
-// o que a pessoa já está vendo; só dá um feedback visual discreto no botão.
-async function atualizarCatalogoManual() {
-    const btn = document.getElementById('btn-refresh-catalog');
-    if (btn) {
-        btn.disabled = true;
-        btn.style.opacity = '0.4';
-        btn.style.animation = 'spin 1s linear infinite';
-    }
-    try {
-        const fresh = await baixarCatalogoDaRede();
-        aplicarCatalogo(fresh.db, fresh.cats);
-        salvarCacheCatalogo();
-        renderizarViewAtual();
-    } catch (err) {
-        alert("Não foi possível atualizar o catálogo agora. Verifique sua conexão/proxy e tente de novo.");
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.style.opacity = '1';
-            btn.style.animation = '';
-        }
-    }
-}
-window.atualizarCatalogoManual = atualizarCatalogoManual;
-
-const btnRefreshCatalog = document.getElementById('btn-refresh-catalog');
-if (btnRefreshCatalog) btnRefreshCatalog.addEventListener('click', atualizarCatalogoManual);
-
-// INICIALIZAÇÃO E LÓGICA DE LOGIN (DOM Event Listeners Base)
-window.onload = () => {
-    const loginScreen = document.getElementById('login-screen');
-    const savedUser = localStorage.getItem('iptv_user');
-    const savedDns = localStorage.getItem('iptv_dns');
-    const savedPass = localStorage.getItem('iptv_pass');
-    
-    if (savedUser && savedDns && savedPass) {
-        credenciais.host = savedDns;
-        credenciais.user = savedUser;
-        credenciais.pass = savedPass;
-        loginScreen.style.display = 'none';
-        carregarCatalogoCompleto();
+      });
+      caixa.innerHTML = html;
     } else {
-        loginScreen.style.display = 'flex';
+      caixa.textContent = 'Programação indisponível.';
+      const mini = $('prog-' + pedido.id);
+      if (mini) mini.textContent = 'Programação indisponível';
     }
-};
+  } catch (e) {
+    if ($('epg-canal').textContent === pedido.nome) $('epg-conteudo').textContent = 'Falha ao carregar programação.';
+  } finally {
+    epgRodando--;
+  }
+}
 
-document.getElementById('btn-profile').addEventListener('click', () => {
-    const profileModal = document.getElementById('profile-modal');
-    document.getElementById('modal-profile-name').textContent = localStorage.getItem('iptv_profile') || 'Meu Perfil';
-    document.getElementById('modal-profile-user').textContent = localStorage.getItem('iptv_user');
-    profileModal.style.display = 'flex';
-});
+function decodificarEPG(str) {
+  if (!str) return '';
+  try { return decodeURIComponent(escape(atob(str))); }
+  catch (e) { return str; }
+}
 
-document.getElementById('btn-close-modal').addEventListener('click', () => { 
-    document.getElementById('profile-modal').style.display = 'none'; 
-});
+function urlCanal(item) {
+  let url = credenciais.host + '/live/' + credenciais.user + '/' + credenciais.pass +
+            '/' + item.stream_id + '.' + (item.container_extension || 'm3u8');
+  url = url.replace('.ts', '.m3u8');
+  return url;
+}
 
-document.getElementById('profile-modal').addEventListener('click', (e) => { 
-    const profileModal = document.getElementById('profile-modal');
-    if(e.target === profileModal) profileModal.style.display = 'none'; 
-});
-
-document.getElementById('btn-logout').addEventListener('click', () => {
-    localStorage.removeItem('iptv_user');
-    localStorage.removeItem('iptv_pass');
-    localStorage.removeItem('iptv_dns');
-    localStorage.removeItem('iptv_profile');
-    window.location.reload();
-});
-
-document.getElementById('btn-login').addEventListener('click', () => {
-    const loginScreen = document.getElementById('login-screen');
-    let dns = document.getElementById('login-dns').value.trim();
-    const user = document.getElementById('login-user').value.trim();
-    const pass = document.getElementById('login-pass').value.trim();
-    const profile = document.getElementById('login-profile').value.trim() || 'Minha TV';
-
-    if (!dns || !user || !pass) {
-        alert("Por favor, preencha todos os campos obrigatórios (DNS, Usuário e Senha).");
-        return;
-    }
-
-    if (!dns.startsWith('http')) dns = 'http://' + dns;
-    if (dns.endsWith('/')) dns = dns.slice(0, -1);
-
-    localStorage.setItem('iptv_profile', profile);
-    localStorage.setItem('iptv_dns', dns);
-    localStorage.setItem('iptv_user', user);
-    localStorage.setItem('iptv_pass', pass);
-    
-    credenciais.host = dns;
-    credenciais.user = user;
-    credenciais.pass = pass;
-
-    loginScreen.style.display = 'none';
-    carregarCatalogoCompleto();
-});
+function assistirCanal(item) {
+  const url = urlCanal(item);
+  abrirPlayer(url, { id: item.stream_id, name: item.name, url, aba: 'live', logo: item.stream_icon });
+}

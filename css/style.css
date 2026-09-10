@@ -1,985 +1,487 @@
-/* =========================================
-   MEU IPTV - iOS / GLASSMORPHISM STYLE
-   ========================================= */
-
+/* ============================================================
+   Meu IPTV — versão TV (10-foot UI)
+   Leve: sem animações pesadas, sem blur caro, foco visível.
+   ============================================================ */
 :root {
-    --bg-base: #000000; 
-    --bg-glass-dark: rgba(18, 18, 20, 0.65); 
-    --bg-glass-light: rgba(255, 255, 255, 0.05); 
-    --bg-glass-hover: rgba(255, 255, 255, 0.1);
-    
-    --accent: #0a84ff; 
-    --accent-hover: #007aff;
-    --event-color: #ff453a; 
-    --history-color: #30d158; 
-    
-    --text-main: #f5f5f7;
-    --text-muted: #86868b;
-    
-    --border-light: rgba(255, 255, 255, 0.1);
-    --border-glass: rgba(255, 255, 255, 0.08);
-    
-    --star-active: #ffd60a; 
-    
-    --glass-blur: blur(12px);
-}
-
-* { 
-    box-sizing: border-box; 
-    margin: 0; 
-    padding: 0; 
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, sans-serif; 
-    -webkit-font-smoothing: antialiased;
-    /* Suavidade em toque: remove o delay de 300ms antes de registrar um tap
-       (o navegador não precisa mais esperar pra ver se vai virar duplo-toque
-       de zoom) e tira aquele flash cinza/azul padrão ao tocar em botões —
-       é exatamente esse tipo de detalhe que faz um app parecer "nativo". */
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
-}
-
-html {
-    /* Evita "borracha" (rubber-band) puxando a página inteira pros lados —
-       cada área rolável cuida do seu próprio scroll (ver overflow-x/y abaixo). */
-    overscroll-behavior: none;
-}
-
-body { 
-    background-color: var(--bg-base); 
-    color: var(--text-main); 
-    display: flex; 
-    height: 100vh; 
-    height: 100dvh; /* evita "pulo" de layout no mobile quando a barra de endereço aparece/some */
-    overflow: hidden; 
-    flex-direction: row; 
-    background-image: radial-gradient(circle at top left, #121214, #000000);
-    overflow-x: hidden;
-}
-
-/* ================== TELA DE LOGIN ================== */
-#login-screen { 
-    position: fixed; inset: 0; background-color: #050505; z-index: 9999; display: flex; 
-    flex-direction: column; align-items: center; justify-content: center; overflow: hidden;
-}
-#login-screen::before, #login-screen::after, .login-glow {
-    content: ''; position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.35; z-index: 0; pointer-events: none;
-}
-#login-screen::before { width: 50vw; height: 50vw; background: var(--accent); top: -20vw; left: -10vw; }
-#login-screen::after { width: 60vw; height: 60vw; background: var(--event-color); bottom: -30vw; right: -10vw; }
-.login-glow { width: 40vw; height: 40vw; background: var(--history-color); top: 30%; left: 60%; opacity: 0.15; }
-
-.login-logo {
-    position: absolute; top: 50px; left: 50%; transform: translateX(-50%); display: flex; 
-    align-items: center; justify-content: center; gap: 8px; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: white; z-index: 2;
-}
-.login-logo img { width: 26px; height: 26px; border-radius: 6px; }
-.login-logo span { color: var(--accent); }
-
-.login-form-container { position: relative; z-index: 2; width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; }
-.login-form-container h2 { font-size: 26px; font-weight: 700; color: white; margin-bottom: 8px; letter-spacing: -0.5px; }
-.login-form-container p { font-size: 14px; color: var(--text-muted); text-align: center; margin-bottom: 35px; }
-
-.login-inputs { width: 100%; display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
-.login-input { 
-    width: 100%; background: rgba(25, 25, 25, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); 
-    color: white; padding: 16px 18px; border-radius: 12px; outline: none; font-size: 15px; 
-    transition: 0.3s ease; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-}
-.login-input::placeholder { color: #777; }
-.login-input:focus { border-color: rgba(255, 255, 255, 0.4); background: rgba(40, 40, 40, 0.6); }
-
-.input-with-prefix {
-    display: flex; align-items: center; width: 100%; background: rgba(25, 25, 25, 0.4); 
-    border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: 0.3s ease; overflow: hidden; 
-}
-.input-with-prefix:focus-within { border-color: rgba(255, 255, 255, 0.4); background: rgba(40, 40, 40, 0.6); }
-.input-prefix { padding-left: 18px; color: #777; font-size: 15px; font-weight: 500; user-select: none; }
-.login-input-no-bg { flex: 1; background: transparent; border: none; color: white; padding: 16px 18px 16px 4px; outline: none; font-size: 15px; }
-.login-input-no-bg::placeholder { color: #555; }
-
-.btn-login { 
-    width: 100%; background: rgba(255, 255, 255, 0.1); color: #ccc; border: none; padding: 16px; 
-    border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.3s ease; font-size: 16px; 
-    display: flex; justify-content: center; align-items: center; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-}
-.btn-login:hover { background: rgba(255, 255, 255, 0.2); color: white; transform: scale(0.98); }
-
-
-/* ================== MENU SUPERIOR (HEADER DESKTOP) ================== */
-#top-nav {
-    position: fixed; top: 0; left: 0; right: 0; height: 90px; display: flex;
-    align-items: center; justify-content: space-between; padding: 0 60px; z-index: 2000;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 50%, transparent 100%); transition: background 0.3s ease;
-}
-
-.nav-left, .nav-right { display: flex; align-items: center; gap: 30px; }
-.nav-center { 
-    position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center;
-    gap: 8px; font-weight: 800; font-size: 24px; color: white; letter-spacing: -0.5px;
-}
-.nav-center span { color: var(--accent); }
-.nav-center img { height: 28px; border-radius: 6px; }
-
-/* Fica fora do <header>, mas no desktop se posiciona exatamente onde o antigo .nav-right
-   ficava (canto superior direito) — como o gradiente de fundo do #top-nav já cobre a
-   largura toda, os ícones continuam parecendo parte do mesmo menu. */
-#top-actions-bar { position: fixed; top: 0; right: 0; height: 90px; padding: 0 60px 0 0; z-index: 2001; }
-
-.nav-link { background: none; border: none; color: var(--text-muted); font-size: 17px; font-weight: 600; cursor: pointer; transition: 0.3s ease; }
-.nav-link:hover { color: white; }
-.nav-link.active { color: white; text-shadow: 0 0 15px rgba(255,255,255,0.6); }
-
-.icon-btn { background: none; border: none; color: white; cursor: pointer; opacity: 0.7; transition: 0.3s; }
-.icon-btn:hover { opacity: 1; transform: scale(1.1); }
-.icon-btn svg { width: 26px; height: 26px; fill: currentColor; }
-
-.search-wrapper {
-    display: none; align-items: center; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); 
-    border: 1px solid var(--border-glass); border-radius: 20px; padding: 8px 15px; transition: 0.3s ease;
-}
-.search-wrapper.active { display: flex; animation: fadeIn 0.3s ease; }
-.search-wrapper svg { width: 18px; height: 18px; fill: var(--text-muted); margin-right: 8px; }
-.search-wrapper input { background: transparent; border: none; color: white; outline: none; font-size: 15px; width: 180px; }
-.search-wrapper input::placeholder { color: var(--text-muted); }
-
-@keyframes fadeIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-
-/* BARRA DE CATEGORIAS HORIZONTAL */
-#category-bar {
-    position: fixed; top: 90px; left: 0; right: 0; padding: 0 60px; z-index: 1500;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
-    overflow-x: auto; white-space: nowrap; scrollbar-width: none; 
-}
-#category-bar::-webkit-scrollbar { display: none; }
-#category-bar.hidden { display: none; }
-
-#category-list { display: flex; gap: 15px; list-style: none; padding: 10px 0 20px 0; margin: 0; }
-#category-list li { 
-    padding: 8px 16px; background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 20px; 
-    cursor: pointer; color: var(--text-main); font-size: 14px; font-weight: 600; transition: 0.3s ease; 
-}
-#category-list li:hover { background: rgba(255,255,255,0.2); }
-#category-list li.active { background: white; color: black; }
-
-/* Botão "Categorias" e botão de fechar da gaveta — só existem no mobile (ver
-   media query mais abaixo). No desktop já cabem todas as pills na horizontal,
-   então ficam escondidos aqui por padrão. */
-.cat-drawer-toggle, .cat-drawer-close { display: none; }
-
-
-/* ================== MAIN AREA & HERO BANNER ================== */
-#main-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; background: transparent; }
-.view-section { display: none; flex-direction: column; flex-grow: 1; overflow-y: auto; padding: 0; scroll-behavior: smooth; position: absolute; inset: 0; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
-.view-section.active { display: flex; }
-
-.hero-slider { position: relative; height: 85vh; min-height: 500px; overflow: hidden; margin-bottom: -80px; background: #000; }
-.hero-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1s ease-in-out; display: flex; align-items: flex-end; justify-content: center; padding: 0 60px 120px 60px; text-align: center; cursor: pointer; }
-.hero-slide.active { opacity: 1; z-index: 2; }
-.hero-bg { 
-    position: absolute; inset: 0; background-image: var(--hero-backdrop); background-size: cover; background-position: top center; z-index: 0; 
-    transition: transform 12s linear; mask-image: linear-gradient(to top, transparent 0%, black 50%, black 100%); 
-    -webkit-mask-image: linear-gradient(to top, transparent 0%, black 50%, black 100%); opacity: 0.6; 
-}
-.hero-slide.active .hero-bg { transform: scale(1.04); }
-.hero-overlay-gradient { position: absolute; inset: 0; background: linear-gradient(to top, var(--bg-base) 0%, rgba(0,0,0,0.5) 40%, transparent 100%); z-index: 1; }
-
-.hero-content { position: relative; z-index: 2; max-width: 900px; display: flex; flex-direction: column; align-items: center; }
-.hero-title { font-size: 72px; font-weight: 900; text-transform: uppercase; letter-spacing: -2px; line-height: 1.1; margin-bottom: 12px; text-shadow: 0 4px 20px rgba(0,0,0,0.8); }
-.hero-logo { max-height: 200px; margin-bottom: 20px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); }
-
-.hero-meta-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 25px; align-items: center; justify-content: center;}
-.hero-meta-badge { 
-    background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border: 1px solid var(--border-glass); 
-    padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 6px; 
-}
-
-.slider-controls { position: absolute; left: 50%; transform: translateX(-50%); bottom: 80px; z-index: 10; display: flex; gap: 8px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.3); transition: 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
-.dot.active { background: white; width: 24px; border-radius: 10px; box-shadow: 0 0 10px rgba(255,255,255,0.5);}
-
-/* ================== CARDS & SCROLLERS ================== */
-.home-content-wrapper { padding: 0 0 60px 0; position: relative; z-index: 10; }
-.home-row { margin-bottom: 35px; }
-
-.home-row-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px; padding: 0 60px; }
-.home-row-header h3 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: white; }
-.home-row-header .see-all { color: var(--text-muted); font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-.home-row-header .see-all:hover { color: white; }
-.home-row > h3 { display: none; }
-
-.scroller-container { position: relative; display: flex; align-items: center; width: 100%; }
-.scroller-container:hover .scroll-btn { opacity: 1; }
-.scroll-btn { 
-    position: absolute; z-index: 20; background: rgba(30, 30, 30, 0.5); backdrop-filter: blur(10px); 
-    border: 1px solid var(--border-light); color: white; width: 48px; height: 48px; border-radius: 50%; 
-    display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: 0.3s; top: 50%; transform: translateY(-50%); 
-}
-.scroll-btn:hover { background: white; color: black; transform: translateY(-50%) scale(1.1); box-shadow: 0 10px 20px rgba(0,0,0,0.5);}
-.scroll-btn svg { width: 26px; height: 26px; fill: currentColor; }
-.scroll-btn.hidden-btn { display: none !important; }
-.left-btn { left: 15px; }
-.right-btn { right: 15px; }
-
-.row-scroller { display: flex; gap: 18px; overflow-x: auto; overflow-y: hidden; padding: 15px 60px 40px 60px; scroll-snap-type: x mandatory; scroll-padding-left: 60px; scrollbar-width: none; width: 100%; -webkit-overflow-scrolling: touch; }
-.row-scroller::-webkit-scrollbar { display: none; }
-
-/* NÚMEROS GIGANTES TOP 10 */
-.numbered-item { position: relative; display: flex; align-items: center; padding-left: 50px; margin-right: 20px; scroll-snap-align: start; cursor: pointer; }
-.huge-number { position: absolute; left: -10px; bottom: -20px; font-size: 180px; font-weight: 900; color: transparent; -webkit-text-stroke: 2px rgba(255,255,255,0.2); z-index: 0; line-height: 0.8; font-family: -apple-system, sans-serif; letter-spacing: -10px; transition: all 0.4s ease; pointer-events: none; }
-.numbered-item:hover .huge-number { -webkit-text-stroke: 2px white; text-shadow: 0 0 20px rgba(255,255,255,0.3); }
-.numbered-item .media-card { z-index: 1; min-width: 140px; max-width: 140px; }
-
-/* ESTILO DOS CARDS */
-.media-card { 
-    background: transparent; border-radius: 16px; overflow: visible; cursor: pointer; position: relative; 
-    transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1); min-width: 150px; max-width: 150px; scroll-snap-align: start; 
-    display: flex; flex-direction: column; 
-}
-.media-card:hover { transform: translateY(-8px) scale(1.03); z-index: 10; }
-
-.img-container { 
-    width: 100%; aspect-ratio: 2/3; position: relative; background: rgba(255,255,255,0.05); border-radius: 16px; 
-    overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.3); transition: all 0.4s ease; border: 1px solid var(--border-glass);
-}
-.media-card:hover .img-container { box-shadow: 0 20px 40px rgba(0,0,0,0.6); border-color: rgba(255,255,255,0.3); }
-.media-card img { width: 100%; height: 100%; object-fit: cover; transition: 0.4s ease; }
-
-.media-card.is-16x9 { min-width: 260px; max-width: 260px; }
-.media-card.is-16x9 .img-container { aspect-ratio: 16 / 9; border-radius: 16px; }
-
-.progress-bar-bg { width: 100%; height: 4px; background: rgba(255,255,255,0.2); position: absolute; bottom: 0; left: 0; z-index: 5;}
-.progress-bar-fill { height: 100%; background: white; transition: width 0.3s; }
-
-.btn-fav { 
-    position: absolute; top: 10px; right: 10px; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; width: 32px; height: 32px; 
-    display: flex; align-items: center; justify-content: center; z-index: 10; transition: 0.3s ease; cursor: pointer; 
-}
-.btn-fav svg { width: 16px; height: 16px; fill: none; stroke: white; stroke-width: 2; transition: 0.3s; }
-.btn-fav:hover { transform: scale(1.1); background: rgba(0,0,0,0.7); }
-.btn-fav.is-fav svg { fill: var(--star-active); stroke: var(--star-active); }
-
-.card-info { padding: 12px 5px; display: flex; flex-direction: column; gap: 4px; }
-.card-title { font-size: 14px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--text-muted); line-height: 1.4; transition: 0.2s;}
-.media-card:hover .card-title { color: white; }
-
-/* ================== GRID E LISTAS ================== */
-#media-grid {
-    /* Usamos flexbox (com wrap) em vez de CSS Grid: alguns navegadores de Smart TV
-       mais antigos (webOS/Tizen) não suportam Grid corretamente, e os cards ficavam
-       todos empilhados verticalmente, um abaixo do outro, em vez de lado a lado. */
-    display: flex; flex-wrap: wrap; gap: 20px 20px;
-    /* Espaço padrão: só o menu principal fixo (90px) fica por cima. */
-    padding: 110px 60px 40px 60px;
-}
-.grid-header {
-    font-size: 28px; font-weight: 800; color: white; letter-spacing: -0.5px; display: none;
-    padding: 110px 60px 10px 60px;
-}
-/* Quando a barra de categorias também está visível (Filmes/Séries), ela soma
-   mais ~65px de altura fixa por cima do menu principal. Sem esse ajuste, o
-   texto do cabeçalho de resultados e os primeiros cards nasciam bem embaixo
-   da barra de categorias — em vez de embaixo dela, ficavam ATRÁS dela (por
-   causa do z-index maior da barra), causando a sobreposição visual. */
-#grid-view.tem-category-bar #media-grid,
-#grid-view.tem-category-bar .grid-header {
-    padding-top: 175px;
-}
-.grid-empty-state { grid-column: 1 / -1; text-align: center; padding: 100px 20px; color: var(--text-muted); font-size: 16px; }
-
-/* ================== LAYOUT TV AO VIVO ================== */
-#live-layout-container {
-    display: flex; gap: 30px; height: 100vh; height: 100dvh; width: 100%;
-    padding: 110px 60px 30px 60px; position: relative; overflow: hidden;
-}
-
-#live-category-sidebar {
-    /* Em telas grandes (desktop/TV) a gaveta fica sempre aberta e ocupa espaço
-       fixo dentro do layout, em vez de ser um painel escondido que precisa de
-       um botão para abrir — numa TV há espaço de sobra e isso poupa um clique
-       a cada troca de canal/categoria. */
-    position: relative; flex: 0 0 300px; width: 300px; height: 100%; left: 0; top: 0; bottom: auto;
-    background: rgba(15, 15, 15, 0.95); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border-right: 1px solid var(--border-glass); border-radius: 16px; z-index: 10; display: flex; flex-direction: column;
-    padding: 20px; box-shadow: none;
-}
-#live-category-sidebar.open { left: 0; }
-/* Painel sempre visível: nem o fundo escurecido nem o botão de abrir fazem
-   sentido aqui (só existem para o padrão de "gaveta" usado no mobile). */
-#live-sidebar-backdrop { display: none; }
-#btn-toggle-live-cats { display: none; }
-
-/* Fundo escurecido atrás da gaveta de categorias — só fica clicável/visível
-   quando ela está aberta (padrão comum em apps mobile pra indicar "modal"). */
-#live-sidebar-backdrop {
-    position: absolute; inset: 0; background: rgba(0,0,0,0.6); z-index: 999;
-    opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-}
-#live-layout-container.sidebar-aberta #live-sidebar-backdrop {
-    opacity: 1; pointer-events: auto;
-}
-
-.live-search {
-    display: flex; align-items: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); 
-    border-radius: 12px; padding: 12px 15px; margin-bottom: 20px;
-}
-.live-search svg { width: 18px; height: 18px; fill: var(--text-muted); margin-right: 10px; }
-.live-search input { background: transparent; border: none; color: white; width: 100%; outline: none; font-size: 15px;}
-
-#live-category-list { list-style: none; flex-grow: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 5px; }
-#live-category-list li {
-    padding: 12px 15px; border-radius: 12px; cursor: pointer; color: var(--text-main); font-size: 15px;
-    font-weight: 500; display: flex; align-items: center; transition: 0.3s;
-}
-#live-category-list li svg { width: 18px; height: 18px; fill: currentColor; margin-right: 12px; opacity: 0.7;}
-#live-category-list li:hover { background: rgba(255,255,255,0.05); }
-#live-category-list li.active { background: white; color: black; font-weight: 600;}
-
-#live-channels-column { flex: 0 0 40%; max-width: 480px; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.live-channels-header { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
-.live-channels-header button {
-    background: rgba(255,255,255,0.1); border: 1px solid var(--border-glass); width: 40px; height: 40px; 
-    border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s;
-}
-.live-channels-header button:hover { background: white; }
-.live-channels-header button:hover svg { fill: black; }
-.live-channels-header h3 { color: white; font-size: 22px; font-weight: 700; }
-
-#live-channels-list { flex-grow: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 8px; padding-right: 10px; }
-.live-channel-row { 
-    display: flex; align-items: center; background: rgba(35, 35, 35, 0.6); 
-    padding: 12px 15px; border-radius: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s ease; 
-}
-.live-channel-row:hover { background: rgba(55, 55, 55, 0.8); }
-.live-channel-row.selected { border-color: rgba(255,255,255,0.4); background: rgba(65, 65, 65, 0.9); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-.live-channel-row img { 
-    width: 46px; height: 46px; object-fit: contain; border-radius: 8px; margin-right: 15px; 
-    background: rgba(255,255,255,0.05); flex-shrink: 0; padding: 4px;
-}
-.live-channel-info { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;}
-.live-channel-name { font-size: 16px; font-weight: 700; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.live-channel-prog { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.btn-fav-live {
-    background: transparent; border: none; width: 30px; height: 30px; display: flex; 
-    align-items: center; justify-content: center; cursor: pointer; opacity: 0.5; transition: 0.3s;
-}
-.btn-fav-live:hover { opacity: 1; }
-.btn-fav-live svg { width: 18px; height: 18px; fill: transparent; stroke: white; stroke-width: 2; transition: 0.3s;}
-.btn-fav-live.is-fav { opacity: 1; }
-.btn-fav-live.is-fav svg { fill: var(--star-active); stroke: var(--star-active); }
-
-#live-player-column { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; height: 100%; overflow: hidden;}
-#miniplayer-container {
-    width: 100%; max-height: 65%; aspect-ratio: 16 / 9; background: #000; border-radius: 16px; 
-    overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5); border: 1px solid var(--border-glass); 
-    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-}
-#live-mini-video, #live-mini-video_html5_api, .video-js video { object-fit: contain !important; }
-/* Dica visual de que o miniplayer pode ser expandido para tela cheia — some
-   quando o mouse sai / o foco vai pra outro lugar, pra não ficar poluindo a
-   tela o tempo todo. */
-#miniplayer-container { position: relative; cursor: pointer; }
-#miniplayer-expand-hint {
-    position: absolute; top: 14px; right: 14px; z-index: 30; display: flex; align-items: center; gap: 6px;
-    background: rgba(0,0,0,0.65); backdrop-filter: blur(6px); color: white; font-size: 13px; font-weight: 600;
-    padding: 8px 14px; border-radius: 20px; opacity: 0; transition: opacity 0.25s ease; pointer-events: none;
-}
-#miniplayer-expand-hint svg { width: 16px; height: 16px; fill: currentColor; }
-#miniplayer-container:hover #miniplayer-expand-hint,
-#miniplayer-container:focus #miniplayer-expand-hint { opacity: 1; }
-#miniplayer-container:focus { outline: 3px solid var(--accent); outline-offset: 3px; }
-
-#live-epg-container { flex: 1; overflow-y: auto; overflow-x: hidden; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; padding: 5px; }
-.epg-row {
-    background: rgba(30, 30, 30, 0.4); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border: 1px solid var(--border-glass); border-radius: 12px; padding: 16px 20px; display: flex; 
-    align-items: center; color: var(--text-main); font-size: 15px; transition: 0.3s; position: relative;
-}
-.epg-row.active { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); font-weight: 600; }
-.epg-time { min-width: 110px; color: var(--text-muted); font-family: monospace; font-size: 14px;}
-.epg-row.active .epg-time { color: white; }
-.epg-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.epg-dot { width: 6px; height: 6px; background: white; border-radius: 50%; display: none;}
-.epg-row.active .epg-dot { display: block; }
-.epg-progress { position: absolute; bottom: 12px; left: 130px; width: 200px; height: 2px; background: rgba(255,255,255,0.2); display: none;}
-.epg-progress-fill { height: 100%; background: white; width: 50%; }
-.epg-row.active .epg-progress { display: block; }
-
-/* ================== MODAL DE PERFIL ================== */
-.modal-overlay { 
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 4000; display: none; 
-    align-items: center; justify-content: center; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-}
-.modal-content { 
-    background: rgba(25, 25, 25, 0.7); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    border-radius: 24px; padding: 35px; width: 90%; max-width: 350px; border: 1px solid var(--border-glass); 
-    text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.5);
-}
-.modal-header-icon { background: rgba(10, 132, 255, 0.15); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; }
-.modal-header-icon svg { width: 40px; height: 40px; fill: var(--accent); }
-.modal-title { font-size: 24px; font-weight: 800; color: white; margin-bottom: 5px; }
-.modal-subtitle { font-size: 15px; color: var(--text-muted); margin-bottom: 30px; }
-
-.btn-modal { 
-    background: var(--event-color); color: white; border: none; padding: 16px; border-radius: 14px; 
-    font-weight: 600; cursor: pointer; width: 100%; font-size: 16px; display: flex; justify-content: center; 
-    align-items: center; gap: 8px; transition: 0.3s ease; 
-}
-.btn-modal:hover { transform: scale(0.97); filter: brightness(1.1); }
-.btn-modal-secondary { background: rgba(255,255,255,0.1); color: white; border: 1px solid transparent; margin-top: 10px; }
-.btn-modal-secondary:hover { background: rgba(255,255,255,0.2); }
-
-/* ================== DETAIL VIEW (FILMES/SÉRIES) ================== */
-#media-detail { z-index: 100; padding: 0; background: var(--bg-base); }
-.md-bg-blur { position: absolute; inset: 0; height: 100vh; background-size: cover; background-position: top center; opacity: 0.4; mask-image: linear-gradient(to bottom, black 0%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%); filter: blur(10px); transition: background-image 0.5s ease; }
-.md-content { position: relative; z-index: 2; padding: 120px 60px 60px 60px; min-height: 100%; display: flex; flex-direction: column; }
-
-.btn-close { 
-    position: absolute; top: 110px; right: 60px; background: rgba(30,30,30,0.5); border-radius: 50%; 
-    border: 1px solid var(--border-glass); color: white; width: 48px; height: 48px; cursor: pointer; transition: 0.3s ease; 
-    backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; z-index: 200; 
-}
-.btn-close:hover { background: white; color: black; transform: scale(1.1); }
-.btn-close svg { width: 24px; height: 24px; fill: currentColor; }
-
-.md-top-section { display: flex; gap: 60px; align-items: flex-start; margin-top: 20px; }
-.md-poster { width: 300px; border-radius: 20px; box-shadow: 0 30px 60px rgba(0,0,0,0.6); object-fit: cover; aspect-ratio: 2/3; border: 1px solid var(--border-glass); }
-.md-info { flex: 1; max-width: 800px; display: flex; flex-direction: column; justify-content: center; padding-top: 20px;}
-
-.md-logo { max-width: 350px; max-height: 130px; object-fit: contain; margin-bottom: 20px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); }
-.md-title { font-size: 48px; font-weight: 900; color: white; margin-bottom: 20px; letter-spacing: -1px;}
-
-.md-meta { font-size: 15px; color: var(--text-muted); display: flex; gap: 15px; font-weight: 600; flex-wrap: wrap; margin-bottom: 25px;}
-.md-desc { font-size: 17px; color: #d4d4d8; line-height: 1.6; margin-bottom: 30px; font-weight: 400;}
-
-.md-actions { display: flex; gap: 15px; margin-top: 10px; align-items: center;}
-.btn-play-main { 
-    background: white; color: black; border: none; padding: 16px 40px; border-radius: 16px; font-size: 17px; 
-    font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: 0.3s ease; box-shadow: 0 10px 20px rgba(255,255,255,0.2);
-}
-.btn-play-main:hover { transform: scale(1.05); box-shadow: 0 15px 30px rgba(255,255,255,0.3); }
-
-.btn-fav-main { 
-    background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); color: white; border: 1px solid var(--border-glass); 
-    width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s ease; 
-}
-.btn-fav-main svg { width: 24px; height: 24px; fill: transparent; stroke: currentColor; stroke-width: 2; transition: 0.3s; }
-.btn-fav-main:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
-.btn-fav-main.is-fav { border-color: var(--star-active); color: var(--star-active); background: rgba(255, 214, 10, 0.1);}
-.btn-fav-main.is-fav svg { fill: var(--star-active); stroke: var(--star-active); }
-
-.series-layout { display: flex; gap: 40px; margin-top: 40px; align-items: flex-start; }
-.seasons-sidebar { width: 220px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
-.season-btn { 
-    padding: 14px 20px; background: rgba(255,255,255,0.05); color: var(--text-main); border-radius: 12px; 
-    cursor: pointer; text-align: left; font-weight: 600; font-size: 15px; transition: 0.3s ease; border: 1px solid transparent; 
-}
-.season-btn:hover { background: rgba(255,255,255,0.1); }
-.season-btn.active { background: white; color: black; box-shadow: 0 5px 15px rgba(255,255,255,0.2);}
-
-.episodes-list { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; }
-.episode-row-card { 
-    display: flex; background: rgba(30, 30, 30, 0.4); backdrop-filter: blur(10px); border-radius: 16px; 
-    overflow: hidden; cursor: pointer; transition: 0.3s ease; border: 1px solid var(--border-glass); 
-}
-.episode-row-card:hover { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); transform: translateX(8px); }
-.ep-row-img { width: 240px; min-width: 240px; aspect-ratio: 16/9; background: #000; position: relative; }
-.ep-row-img img { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
-.ep-row-info { padding: 25px; display: flex; flex-direction: column; justify-content: center; flex-grow: 1; }
-.ep-row-title { font-size: 17px; font-weight: 700; color: white; margin-bottom: 8px; }
-.ep-row-desc { font-size: 14px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
-.ep-play-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.3s ease; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
-.episode-row-card:hover .ep-play-overlay { opacity: 1; }
-.ep-play-overlay svg { width: 48px; height: 48px; fill: white; }
-
-/* PLAYER OVERLAY */
-#player-wrapper { display: none; position: absolute; inset: 0; background: #000; z-index: 5000; flex-direction: column; }
-
-/* O Video.js sozinho usa um tamanho padrão pequeno (tipo 300x150). Como o #player-wrapper
-   já ocupa a tela inteira, só precisamos fazer o próprio elemento do player (e o vídeo
-   dentro dele) preencherem 100% do espaço do wrapper. */
-#player-wrapper .video-js,
-#player-wrapper #my-video {
-    position: absolute; inset: 0;
-    width: 100% !important; height: 100% !important;
-}
-#player-wrapper .video-js video,
-#player-wrapper .vjs-tech { width: 100% !important; height: 100% !important; object-fit: contain; }
-
-/* ================== CONTROLES DO PLAYER (REDESENHADOS) ==================
-   O Video.js vem com uma skin padrão (vjs-default-skin) meio genérica e com
-   alvos de toque pequenos. Aqui a gente sobrescreve pra: (1) combinar com o
-   visual "glass" do resto do app, (2) ficar confortável de tocar no celular
-   — que era um pedido separado seu. */
-#player-wrapper .vjs-control-bar {
-    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
-    height: 70px; align-items: center; padding: 0 14px;
-}
-/* Barra de progresso: trilho mais grosso, preenchimento na cor de destaque
-   do app (var(--accent)) em vez do cinza padrão, e uma "bolinha" (thumb)
-   maior e sempre visível — mais fácil de agarrar com o dedo pra arrastar. */
-#player-wrapper .vjs-progress-control { position: absolute; top: -14px; left: 0; right: 0; width: 100%; height: 14px; }
-#player-wrapper .vjs-progress-holder {
-    height: 5px; margin: 0 14px; border-radius: 3px; background: rgba(255,255,255,0.25);
-    transition: height 0.15s ease;
-}
-#player-wrapper .vjs-progress-control:hover .vjs-progress-holder,
-#player-wrapper .vjs-progress-holder:active { height: 8px; }
-#player-wrapper .vjs-play-progress { background: var(--accent); border-radius: 3px; }
-#player-wrapper .vjs-load-progress { background: rgba(255,255,255,0.35); border-radius: 3px; }
-#player-wrapper .vjs-load-progress div { background: rgba(255,255,255,0.2); }
-/* A "bolinha" que fica na ponta do progresso, pra arrastar */
-#player-wrapper .vjs-play-progress:before {
-    font-size: 15px; top: -5px; color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-}
-#player-wrapper .vjs-time-tooltip {
-    background: rgba(20,20,22,0.9); border-radius: 6px; padding: 4px 8px; font-size: 12px;
-}
-
-/* Botão central de play/pause e demais botões — maiores, com feedback de
-   toque via :active em vez de só :hover (que não existe de verdade no touch). */
-#player-wrapper .vjs-control-bar .vjs-button > .vjs-icon-placeholder:before {
-    font-size: 26px; line-height: 46px;
-}
-#player-wrapper .vjs-control-bar .vjs-button {
-    width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
-}
-#player-wrapper .vjs-button:active { transform: scale(0.9); transition: transform 0.1s ease; }
-
-/* Botão grande de play no centro, exibido antes de começar a tocar */
-#player-wrapper .vjs-big-play-button {
-    width: 76px; height: 76px; line-height: 76px; border-radius: 50%;
-    background: rgba(0,0,0,0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border: 2px solid rgba(255,255,255,0.5); top: 50%; left: 50%; margin-top: -38px; margin-left: -38px;
-}
-#player-wrapper .vjs-big-play-button .vjs-icon-placeholder:before { font-size: 34px; line-height: 72px; }
-
-/* Volume — mesma cor de destaque, trilho mais visível */
-#player-wrapper .vjs-volume-level { background: var(--accent); }
-#player-wrapper .vjs-volume-bar { background: rgba(255,255,255,0.25); border-radius: 3px; }
-#player-wrapper .vjs-volume-panel { display: flex; align-items: center; }
-
-/* Botão "Próximo episódio" — canto inferior direito, aparece nos últimos
-   segundos do episódio. */
-.btn-proximo-episodio {
-    position: absolute; right: 24px; bottom: 100px; z-index: 5100;
-    display: flex; align-items: center; gap: 10px;
-    background: rgba(20,20,22,0.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    border: 1px solid var(--border-glass); border-radius: 14px; padding: 12px 18px;
-    color: white; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    animation: fadeIn 0.3s ease;
-}
-.btn-proximo-episodio:active { transform: scale(0.96); }
-.prox-ep-textos { display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
-.prox-ep-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-.prox-ep-nome { font-size: 14px; font-weight: 700; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-
-#player-wrapper.player-loading::after {
-    content: ''; position: absolute; top: 50%; left: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px;
-    border: 4px solid rgba(255,255,255,0.25); border-top-color: var(--accent); border-radius: 50%;
-    animation: spin 0.8s linear infinite; z-index: 5050; pointer-events: none;
-}
-#player-erro-msg {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center;
-    color: white; z-index: 5050; background: rgba(20,20,22,0.85); backdrop-filter: blur(10px);
-    padding: 30px 40px; border-radius: 16px; border: 1px solid var(--border-glass);
-}
-#btn-retry-player {
-    margin-top: 14px; padding: 10px 24px; border-radius: 12px; border: none; background: var(--accent);
-    color: white; font-weight: 700; cursor: pointer; transition: 0.2s ease;
-}
-#btn-retry-player:hover { background: var(--accent-hover); transform: scale(1.03); }
-#player-resume-toast {
-    position: absolute; top: 30px; left: 50%; transform: translateX(-50%); z-index: 5050;
-    background: rgba(20,20,22,0.85); backdrop-filter: blur(10px); color: white; padding: 10px 20px;
-    border-radius: 12px; font-size: 14px; font-weight: 600; border: 1px solid var(--border-glass);
-    transition: opacity 0.4s ease; pointer-events: none;
-}
-#btn-fechar-player { 
-    position: absolute; top: 30px; left: 30px; background: rgba(30,30,30,0.5); border: 1px solid var(--border-glass); 
-    color: white; padding: 12px 24px; border-radius: 12px; cursor: pointer; z-index: 5100; display: flex; align-items: center; 
-    gap: 8px; font-weight: 600; backdrop-filter: blur(10px); transition: 0.3s ease;
-}
-#btn-fechar-player:hover { background: white; color: black; transform: scale(1.05);}
-
-#global-loader { position: absolute; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 9000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); }
-.spinner-large { width: 60px; height: 60px; border: 5px solid rgba(255,255,255,0.1); border-left-color: var(--accent); border-radius: 50%; animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite; margin-bottom: 25px; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
-
-
-/* =========================================
-   📱 RESPONSIVIDADE ULTRA MOBILE (Idêntico ao Mockup)
-   ========================================= */
-@media (max-width: 768px) {
-    /* flex-direction: column é essencial aqui — o body é flex-direction:row por padrão
-       (regra base no topo do arquivo), o que nunca importou no desktop porque
-       #category-bar e #top-nav são position:fixed lá (saem do fluxo). No mobile,
-       #category-bar volta a ser position:relative (mais abaixo), reentrando no
-       fluxo normal como irmão flex de #main-area — sem essa linha os dois
-       ficariam lado a lado na horizontal, espremendo a grade pra fora da tela. */
-    body { background-color: #000; flex-direction: column; } /* Fundo totalmente preto no mobile para destacar os cards */
-
-    /* 1. TELA DE LOGIN MOBILE */
-    .login-logo { top: 40px; font-size: 18px; }
-    .login-logo img { width: 22px; height: 22px; }
-    .login-form-container { padding: 0 25px; }
-    .login-form-container h2 { font-size: 24px; }
-    .login-form-container p { font-size: 13px; margin-bottom: 25px; line-height: 1.4; }
-    #login-screen::before { width: 90vw; height: 90vw; top: -10vw; left: -20vw; }
-    #login-screen::after { width: 100vw; height: 100vw; bottom: -20vw; right: -20vw; }
-    .login-glow { width: 80vw; height: 80vw; top: 40%; left: 50%; transform: translateX(-50%); opacity: 0.2; }
-    /* font-size 16px é o mínimo pro Safari/Chrome do iOS NÃO darem zoom
-       automático ao focar o campo — abaixo disso, o navegador aumenta o
-       zoom da página inteira sozinho ao tocar no input, o que parece bem
-       "quebrado" num app. Vale pra todo input de texto do app. */
-    .login-input, .login-input-no-bg, #search-box, #live-search-box { font-size: 16px; }
-
-    /* 2. MENU INFERIOR (BOTTOM NAV BAR) — agora só com as abas (Início/Ao Vivo/Filmes/Séries) */
-    #top-nav { 
-        top: auto; bottom: 0; height: 85px; padding: 10px 20px 25px 20px; 
-        background: rgba(10, 10, 10, 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-        border-top: 1px solid rgba(255,255,255,0.05); border-bottom: none;
-        flex-direction: row; justify-content: center; align-items: center;
-        /* área segura do "home indicator" do iPhone — sem isso, os ícones
-           ficam colados/embaixo da faixa de gesto do sistema */
-        padding-bottom: calc(25px + env(safe-area-inset-bottom));
-        height: calc(85px + env(safe-area-inset-bottom));
-    }
-    .nav-center { display: none; } /* Remove logo do menu no mobile */
-    .nav-left { gap: 10px; width: 100%; justify-content: space-around; }
-    
-    .nav-link { 
-        font-size: 13px; opacity: 0.5; font-weight: 500; padding: 5px; 
-        display: flex; flex-direction: column; align-items: center; gap: 4px;
-    }
-    .nav-link.active { 
-        opacity: 1; color: white; font-weight: 700; 
-        border-bottom: 2px solid white; border-radius: 0; text-shadow: none; 
-    }
-
-    /* 2b. BARRA DE AÇÕES NO TOPO (busca, atualizar, perfil) — antes isso tudo ficava
-       espremido dentro da barra de baixo junto com as abas (7 itens numa linha só);
-       agora é uma faixa fixa própria, colada no topo, como um app de verdade. */
-    #top-actions-bar {
-        position: fixed; top: 0; left: 0; right: 0; height: auto; z-index: 2100;
-        display: flex; align-items: center; justify-content: flex-end; gap: 14px;
-        padding: calc(14px + env(safe-area-inset-top)) 20px 12px 20px;
-        /* Sem backdrop-filter aqui de propósito: esse tipo de blur em cima de um elemento
-           cria um "containing block" novo pra filhos com position:fixed — e o overlay de
-           busca em tela cheia (mais abaixo) é filho deste elemento e PRECISA ficar fixo
-           relativo à tela inteira, não só a essa faixinha do topo. Um fundo sólido
-           semi-transparente dá o mesmo efeito visual sem esse problema. */
-        background: rgba(10, 10, 10, 0.9); border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    /* Ícones do topo — alvo de toque confortável (mínimo recomendado ~44px) mesmo com ícone visualmente menor */
-    #top-actions-bar .icon-btn { min-width: 40px; min-height: 40px; display: flex; align-items: center; justify-content: center; }
-    #top-actions-bar .icon-btn:hover { transform: none; } /* hover "grudado" após tap fica estranho no touch */
-    #top-actions-bar .icon-btn:active { opacity: 1; transform: scale(0.92); }
-
-    /* BUSCA — vira um overlay em tela cheia, não faz sentido um campinho de
-       180px espremido dentro da barra de ícones do topo. */
-    .search-wrapper.active {
-        position: fixed; inset: 0; z-index: 6000; width: 100%; height: 100%;
-        background: rgba(10,10,10,0.98); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-        border-radius: 0; border: none; padding: calc(60px + env(safe-area-inset-top)) 20px 20px 20px;
-        align-items: flex-start;
-    }
-    .search-wrapper.active svg { width: 22px; height: 22px; margin-right: 12px; flex-shrink: 0; }
-    .search-wrapper.active input { width: 100%; font-size: 18px; }
-    .btn-fechar-busca-mobile {
-        display: none; background: none; border: none; color: white; opacity: 0.7;
-        margin-left: 10px; flex-shrink: 0;
-    }
-    .search-wrapper.active .btn-fechar-busca-mobile { display: flex; align-items: center; justify-content: center; }
-    .btn-fechar-busca-mobile svg { width: 22px; height: 22px; fill: currentColor; }
-    
-    /* 3. HERO BANNER (Estilo Reel/Vertical) */
-    /* Pôster (retrato, 2:3) em vez do backdrop (paisagem, 16:9) — numa tela alta e estreita,
-       "cover" com uma imagem paisagem precisa ampliar TANTO pra cobrir a altura que vira um
-       zoom gigante numa fatia aleatória. O pôster já nasce numa proporção parecida com a da
-       tela do celular, então o corte fica natural — é o padrão que apps de streaming usam. */
-    .hero-slider { height: 58vh; height: 58dvh; margin-bottom: 20px; }
-    .hero-bg { background-image: var(--hero-poster, var(--hero-backdrop)); background-position: center 18%; }
-    /* Escurece um pouco mais o topo da imagem (além do que o gradiente de baixo já
-       cobre) — sem isso, títulos claros ficavam com pouco contraste atrás dos ícones
-       fixos (busca/perfil/refresh), especialmente em pôsteres mais claros. */
-    .hero-slide .hero-overlay-gradient { background: linear-gradient(to top, var(--bg-base) 0%, rgba(0,0,0,0.55) 40%, rgba(0,0,0,0.15) 65%, rgba(0,0,0,0.45) 100%); }
-    .hero-slide { padding: 0 20px 40px 20px; justify-content: flex-end; }
-    /* max-width:100% + a quebra de linha normal é o que faltava: sem isso, o <h1>
-       (elemento flex sem largura definida, dentro de um container column com
-       align-items:center) crescia pra caber o título inteiro numa linha só e
-       "vazava" pros dois lados da tela, cortado igualmente pelo overflow:hidden
-       do slider — exatamente o efeito de texto cortado que aparecia. Dando uma
-       largura de verdade pro container (.hero-content), o título passa a quebrar
-       linha dentro da tela, e tudo o que é centralizado (título, nota, badges)
-       passa a se centralizar de fato em relação à TELA, não a uma caixa invisível
-       maior do que ela. */
-    .hero-content { width: 100%; }
-    .hero-title { font-size: 44px; letter-spacing: -1px; text-align: center; margin-bottom: 10px; max-width: 100%; overflow-wrap: break-word; word-break: break-word; }
-    .hero-meta-row { justify-content: center; gap: 10px; width: 100%; }
-    .hero-meta-badge { background: transparent; border: none; font-size: 12px; color: #a1a1aa; padding: 0; }
-    .slider-controls { bottom: 40px; }
-
-    /* 4. LAYOUT GERAL (Espaço para o Bottom Nav) */
-    #main-area { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
-    .home-content-wrapper { padding-top: 0; padding-bottom: calc(90px + env(safe-area-inset-bottom) + 20px); }
-
-    /* 5. CABEÇALHOS DAS FILEIRAS (Com Setinha > ) */
-    .home-row { margin-bottom: 30px; }
-    .home-row-header { padding: 0 20px; margin-bottom: 15px; }
-    .home-row-header h3 { font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; width: 100%; }
-    .home-row-header h3::after { content: '>'; font-weight: 300; color: #555; font-size: 18px; }
-    .home-row-header .see-all { display: none; }
-    
-    .row-scroller { padding: 0 20px 10px 20px; gap: 12px; }
-
-    /* 6. CARDS (Imagens limpas sem borda) */
-    .media-card { min-width: 130px; max-width: 130px; }
-    .img-container { border-radius: 12px; border: none; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-    .media-card.is-16x9 { min-width: 240px; max-width: 240px; }
-    
-    .card-info { padding: 10px 0; }
-    .card-title { font-size: 14px; font-weight: 600; }
-
-    /* :hover com "lift" (translateY) pode ficar preso depois de um toque no
-       mobile — desliga o hover aqui e usa :active (efeito de "afundar" ao
-       tocar, mais parecido com o feedback nativo de um app). */
-    .media-card:hover { transform: none; }
-    .media-card:hover .img-container { box-shadow: 0 5px 15px rgba(0,0,0,0.5); border-color: transparent; }
-    .media-card:active { transform: scale(0.96); transition: transform 0.1s ease; }
-
-    /* Altura reservada pra barra fixa do topo (ver #top-actions-bar) — usada em vários
-       lugares abaixo pra nenhum conteúdo nascer escondido atrás dela. */
-    :root { --mobile-topbar-h: calc(66px + env(safe-area-inset-top)); }
-
-    /* 7. FILTROS — as pills ("Todos", "Continuar Assistindo", "Favoritos" + categorias
-       reais) não cabem todas numa linha horizontal no celular; era isso que cortava
-       "Favoritos" pra fora da tela. Agora é um botão único "Categorias": ao tocar, a
-       tela ganha um blur por cima e as opções aparecem empilhadas na vertical pra
-       escolher — o mesmo padrão de gaveta que já existia na TV ao Vivo. */
-    #category-bar { position: relative; top: 0; background: transparent; padding: 0 20px; margin-bottom: 15px; margin-top: var(--mobile-topbar-h); display: flex; }
-
-    .cat-drawer-toggle {
-        display: flex; align-items: center; gap: 8px; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.08);
-        color: white; border-radius: 20px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
-        max-width: 100%; overflow: hidden;
-    }
-    .cat-drawer-toggle svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
-    .cat-drawer-toggle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .cat-drawer-toggle:active { background: #2a2a2c; }
-
-    /* Botão "X" só aparece com a gaveta aberta (ver JS: classe .drawer-open) */
-    .cat-drawer-close {
-        position: fixed; top: calc(14px + env(safe-area-inset-top)); right: 20px; z-index: 5100;
-        width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.12); color: white;
-        border: none; align-items: center; justify-content: center;
-    }
-    .cat-drawer-close svg { width: 18px; height: 18px; fill: currentColor; }
-    #category-bar.drawer-open .cat-drawer-close { display: flex; }
-
-    /* A gaveta: tela cheia, fundo desfocado (o catálogo continua visível, só borrado
-       atrás), categorias empilhadas na vertical — tocar numa já filtra e fecha. */
-    #category-list {
-        position: fixed; inset: 0; z-index: 5000; margin: 0;
-        flex-direction: column; gap: 12px;
-        padding: calc(70px + env(safe-area-inset-top)) 24px calc(40px + env(safe-area-inset-bottom));
-        background: rgba(10,10,10,0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-        overflow-y: auto; -webkit-overflow-scrolling: touch;
-        opacity: 0; pointer-events: none; transform: translateY(12px);
-        transition: opacity 0.25s ease, transform 0.25s ease;
-    }
-    #category-bar.drawer-open #category-list { opacity: 1; pointer-events: auto; transform: translateY(0); }
-    #category-list li {
-        background: rgba(255,255,255,0.06); border-radius: 14px; font-size: 15px; font-weight: 600;
-        border: 1px solid rgba(255,255,255,0.08); padding: 16px 20px; text-align: center;
-    }
-    #category-list li.active { background: white; color: black; border-color: white; }
-
-    /* 8. TV AO VIVO — no mobile não existe o layout "lista + miniplayer + EPG" lado a lado
-       do desktop (não cabe numa tela pequena, e foi isso que causava a confusão de "canais
-       no fundo, não entendi"). Aqui é só a lista de canais, limpa, tela toda pra ela; tocar
-       num canal abre o player grande em tela cheia (ver criarLinhaCanal em ui.js). */
-    #grid-view, #media-grid { padding: 20px; padding-top: var(--mobile-topbar-h); padding-bottom: calc(90px + env(safe-area-inset-bottom) + 20px); }
-    .grid-header { padding-top: var(--mobile-topbar-h); }
-    /* Quando JÁ existe a barra de categorias (#category-bar) acima, ela mesma já reservou
-       o espaço da barra fixa (via margin-top acima) — então a grade não precisa reservar
-       de novo, senão duplicaria o vão em branco no topo. */
-    #grid-view.tem-category-bar #media-grid,
-    #grid-view.tem-category-bar .grid-header { padding-top: 20px; }
-    /* Grade de pôsteres em 3 colunas fixas (padrão de app de streaming) em vez
-       do auto-fill de 150px, que sobrava espaço estranho em telas estreitas. */
-    #media-grid {
-        display: flex; flex-wrap: wrap; gap: 10px 10px;
-    }
-    #media-grid > .media-card {
-        /* 3 colunas fixas: largura = 1/3 da linha menos os gaps entre elas */
-        min-width: calc((100% - 20px) / 3); max-width: calc((100% - 20px) / 3);
-    }
-    /* Aviso de "categoria vazia" (ver renderizarGrade) — evita a tela ficar em branco
-       sem explicação nenhuma, que é o que parecia estar "quebrado". */
-    .grid-empty-state { padding: 60px 20px; text-align: center; color: var(--text-muted); font-size: 14px; grid-column: 1 / -1; }
-
-    #live-layout-container { flex-direction: column; padding: 0; height: auto; overflow: visible; gap: 0; }
-    /* No mobile o painel volta a ser uma gaveta sobreposta (position: fixed),
-       diferente do desktop/TV onde ele fica sempre visível e ocupa espaço fixo. */
-    #live-category-sidebar { position: fixed; flex: none; left: -100%; width: 80%; top: 0; bottom: 0; z-index: 3000; padding-top: calc(30px + env(safe-area-inset-top)); border-radius: 0; }
-    #live-category-sidebar.open { left: 0; }
-    #live-sidebar-backdrop { display: block; }
-    #btn-toggle-live-cats { display: flex; }
-    #live-player-column, #live-epg-container, #miniplayer-container { display: none; }
-    #live-channels-column { flex: none; height: auto; overflow: visible; margin-bottom: 0; padding: 20px; padding-top: var(--mobile-topbar-h); }
-    #live-channels-list { overflow: visible; -webkit-overflow-scrolling: touch; }
-    .live-channels-header { padding-top: 0; }
-
-    /* 9. DETALHES DE FILME/SÉRIE */
-    /* O menu inferior fixo (#top-nav, ~85px + área segura do iPhone) continua na tela
-       aqui — .md-content só reservava 30px no final, então o botão "Assistir Agora"
-       (que fica perto do fim do conteúdo) nascia ATRÁS do menu, meio cortado. Reservando
-       a altura do menu no padding-bottom, o conteúdo passa a ter espaço de sobra pra
-       rolar até o botão ficar totalmente visível, acima do menu. */
-    .md-content { padding: 20px 20px calc(90px + env(safe-area-inset-bottom) + 30px) 20px; padding-top: var(--mobile-topbar-h); }
-    .md-top-section { flex-direction: column; align-items: center; text-align: center; gap: 25px; }
-    .btn-close { top: calc(var(--mobile-topbar-h) + 10px); right: 20px; width: 40px; height: 40px; z-index: 500;}
-    .md-actions { justify-content: center; flex-wrap: wrap; width: 100%;}
-    .btn-play-main { width: 100%; justify-content: center; }
-    .series-layout { flex-direction: column; gap: 20px;}
-    .seasons-sidebar { width: 100%; flex-direction: row; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; padding-bottom: 10px; }
-    .episode-row-card { flex-direction: column; }
-    .ep-row-img { width: 100%; aspect-ratio: 16/9; min-width: 100%;}
-    .ep-row-info { padding: 15px; }
-
-    /* 10. PLAYER DE VÍDEO — controles maiores e com área segura do iPhone,
-       botão de próximo episódio reposicionado pra não colidir com eles. */
-    #btn-fechar-player { top: calc(15px + env(safe-area-inset-top)); }
-    .vjs-control-bar { padding-bottom: env(safe-area-inset-bottom); }
-    .btn-proximo-episodio { right: 12px; bottom: calc(70px + env(safe-area-inset-bottom)); padding: 10px 14px; }
-    .prox-ep-nome { max-width: 140px; }
-}
-/* Animação do ícone de "Atualizar Catálogo" enquanto busca dados novos */
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-/* ================== NAVEGAÇÃO POR CONTROLE REMOTO (TV) ================== */
-/* O app inteiro só tinha estilo de :hover — sem isso, quem navega com D-pad
-   (ver js/tv-nav.js) não teria NENHUM jeito de ver onde o foco está. Cada regra
-   abaixo espelha o :hover já existente do mesmo elemento, pra manter a
-   identidade visual do app; a regra genérica no final cobre qualquer coisa
-   focável que a gente tenha esquecido de estilizar aqui em cima. */
-
-.nav-link:focus,
-.icon-btn:focus,
-.btn-login:focus,
-.login-input:focus,
-.login-input-no-bg:focus,
-.btn-play-main:focus,
-.btn-fav-main:focus,
-.btn-fav:focus,
-.btn-fav-live:focus,
-.btn-modal:focus,
-.season-btn:focus,
-.scroll-btn:focus,
-.cat-drawer-toggle:focus,
-#btn-fechar-player:focus,
-#btn-retry-player:focus,
-#btn-toggle-live-cats:focus,
-#btn-toggle-cat-drawer:focus,
-#btn-close-cat-drawer:focus,
-input:focus {
-    outline: 3px solid var(--accent);
-    outline-offset: 3px;
-}
-
-/* Cards de filme/série e o banner: mesmo destaque "levanta e brilha" do
-   :hover, só que com o contorno de foco no lugar da sombra genérica. */
-.media-card:focus { outline: none; transform: translateY(-8px) scale(1.03); z-index: 10; }
-.media-card:focus .img-container { box-shadow: 0 0 0 3px var(--accent), 0 20px 40px rgba(0,0,0,0.6); border-color: var(--accent); }
-.media-card:focus .card-title { color: white; }
-.hero-slide:focus { outline: 3px solid var(--accent); outline-offset: -3px; }
-
-/* Linhas/itens de lista: fundo destacado + borda interna, sem empurrar layout */
-.live-channel-row:focus,
-#category-list li:focus,
-#live-category-list li:focus,
-.episode-row-card:focus {
-    outline: none;
-    background: rgba(255,255,255,0.18);
-    box-shadow: inset 0 0 0 2px var(--accent);
-}
-
-/* Rede de segurança: qualquer elemento focável sem regra específica acima
-   ainda ganha um contorno visível — nunca fica focado "invisível". */
-:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
-
-
-/* =========================================================
-   FALLBACK DE COMPATIBILIDADE — SMART TVs ANTIGAS
-   =========================================================
-   Várias TVs (principalmente webOS e Tizen de gerações mais antigas) rodam
-   um navegador Chromium/WebKit desatualizado que NÃO entende a propriedade
-   `gap` dentro de flexbox (isso só chegou no Chromium por volta de 2020) nem
-   `aspect-ratio` (chegou depois ainda). O app inteiro usa `gap` para todo o
-   espaçamento entre elementos — quando o navegador não reconhece a
-   propriedade, ele simplesmente a ignora e os itens ficam colados um no
-   outro, sem espaço nenhum entre eles (é isso que estava acontecendo).
-   
-   A regra @supports abaixo só é aplicada quando o navegador NÃO suporta
-   `gap` — em navegadores atuais (que já suportam) ela não faz nada, então
-   não corre o risco de "somar" e dobrar o espaçamento. Ela recria o mesmo
-   espaçamento usando margin, que é suportado por absolutamente qualquer
-   navegador, mesmo os mais antigos. */
-@supports not (gap: 1px) {
-    .login-logo > * + * { margin-left: 8px; }
-    .login-inputs > * + * { margin-top: 12px; }
-    .nav-left > * + *, .nav-right > * + * { margin-left: 30px; }
-    .nav-center > * + * { margin-left: 8px; }
-    #category-list > * + * { margin-left: 15px; }
-    .hero-meta-row > * + * { margin-left: 10px; }
-    .hero-meta-badge > * + * { margin-left: 6px; }
-    .slider-controls > * + * { margin-left: 8px; }
-    .row-scroller > * + * { margin-left: 18px; }
-    .card-info > * + * { margin-top: 4px; }
-    #media-grid > * { margin: 0 20px 20px 0; }
-    #live-layout-container > * + * { margin-left: 30px; }
-    #live-category-list > * + * { margin-top: 5px; }
-    .live-channels-header > * + * { margin-left: 15px; }
-    #live-channels-list > * + * { margin-top: 8px; }
-    .live-channel-info > * + * { margin-top: 4px; }
-    #live-player-column > * + * { margin-top: 20px; }
-    #live-epg-container > * + * { margin-top: 10px; }
-    .btn-modal > * + * { margin-left: 8px; }
-    .md-top-section > * + * { margin-left: 60px; }
-    .md-meta > * + * { margin-left: 15px; }
-    .md-actions > * + * { margin-left: 15px; }
-    .btn-play-main > * + * { margin-left: 10px; }
-    .series-layout > * + * { margin-left: 40px; }
-    .seasons-sidebar > * + * { margin-top: 10px; }
-    .episodes-list > * + * { margin-top: 15px; }
-    .btn-proximo-episodio > * + * { margin-left: 10px; }
-    #btn-fechar-player > * + * { margin-left: 8px; }
-}
-
-/* `aspect-ratio` também não existe em navegadores de TV mais antigos — sem
-   ela, os containers de imagem/vídeo abaixo colapsam para altura zero (ficam
-   invisíveis) porque não têm nenhuma outra forma de saber qual altura usar.
-   O truque abaixo (padding-top em %) é a técnica clássica, bem mais antiga,
-   que produz a mesma proporção e funciona em qualquer navegador. */
-@supports not (aspect-ratio: 1 / 1) {
-    .img-container { aspect-ratio: unset; height: 0; padding-top: 150%; /* 2/3 */ position: relative; }
-    .media-card.is-16x9 .img-container { padding-top: 56.25%; /* 16/9 */ }
-    .img-container img { position: absolute; inset: 0; }
-    #miniplayer-container { aspect-ratio: unset; height: 0; padding-top: 56.25%; position: relative; }
-    #miniplayer-container video { position: absolute; inset: 0; }
-    .ep-row-img { aspect-ratio: unset; height: 0; padding-top: 56.25%; position: relative; }
-    .ep-row-img img { position: absolute; inset: 0; }
-    .md-poster { aspect-ratio: unset; height: 450px; }
-}
+  --accent: #ff5500;
+  --accent-soft: rgba(255, 85, 0, 0.25);
+  --bg: #0b0b0e;
+  --bg-2: #141419;
+  --bg-3: #1d1d24;
+  --text: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --danger: #e11d48;
+  --focus-ring: 0 0 0 4px var(--accent), 0 0 24px 4px var(--accent-soft);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 22px;
+  overflow: hidden;
+}
+
+.screen {
+  display: none;
+  width: 100%; height: 100%;
+}
+.screen.active { display: block; }
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text);
+  background: var(--bg-2);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+}
+button:focus, input:focus, .focusable:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  transform: scale(1.04);
+  z-index: 5;
+  position: relative;
+}
+button:active { background: var(--bg-3); }
+
+svg { width: 28px; height: 28px; fill: currentColor; flex-shrink: 0; }
+
+.hidden { display: none !important; }
+
+/* ============ BOTÕES / INPUTS ============ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 26px;
+  font-weight: 600;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-big { padding: 18px 40px; font-size: 26px; }
+
+.icon-btn {
+  width: 56px; height: 56px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-2);
+}
+
+.input {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 24px;
+  color: var(--text);
+  background: var(--bg-2);
+  border: 2px solid var(--bg-3);
+  border-radius: 12px;
+}
+.input:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+
+.btn-voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  font-size: 20px;
+  color: var(--text-muted);
+}
+.btn-voltar svg { width: 24px; height: 24px; }
+
+/* ============ LOGIN ============ */
+#screen-login {
+  background: radial-gradient(ellipse at 50% 30%, #181820 0%, var(--bg) 70%);
+}
+.login-box {
+  width: 520px;
+  margin: 18vh auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.login-logo { font-size: 44px; font-weight: 800; text-align: center; }
+.login-logo span, .logo span { color: var(--accent); }
+.login-sub { text-align: center; color: var(--text-muted); font-size: 19px; margin-bottom: 10px; }
+.login-erro { color: var(--danger); text-align: center; font-size: 18px; min-height: 24px; }
+
+/* ============ MENU INICIAL ============ */
+.home-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 40px 60px 10px;
+}
+.logo { font-size: 40px; font-weight: 800; }
+.home-header-right { display: flex; align-items: center; gap: 24px; }
+.relogio { color: var(--text-muted); font-size: 22px; font-variant-numeric: tabular-nums; }
+
+.menu-grid {
+  display: flex;
+  gap: 36px;
+  justify-content: center;
+  margin-top: 9vh;
+}
+.menu-tile {
+  width: 340px; height: 230px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  font-size: 30px;
+  font-weight: 700;
+  background: linear-gradient(160deg, var(--bg-2), var(--bg-3));
+  border-radius: 20px;
+}
+.menu-tile svg { width: 84px; height: 84px; fill: var(--accent); }
+
+.home-continue { margin-top: 7vh; padding: 0 60px; }
+.row-title { font-size: 26px; margin-bottom: 16px; color: var(--text-muted); }
+.h-row {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 8px 4px 20px;
+}
+.h-row::-webkit-scrollbar { display: none; }
+
+.cont-card { width: 300px; flex-shrink: 0; background: var(--bg-2); border-radius: 12px; overflow: hidden; }
+.cont-card img { width: 100%; height: 160px; object-fit: cover; display: block; background: var(--bg-3); }
+.cont-card .cont-nome { padding: 10px 14px; font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cont-card .cont-barra { height: 5px; background: var(--bg-3); }
+.cont-card .cont-barra i { display: block; height: 100%; background: var(--accent); }
+
+/* ============ NAVEGAÇÃO (browse) ============ */
+#screen-browse.active { display: flex; }
+
+#browse-sidebar {
+  width: 340px;
+  flex-shrink: 0;
+  background: var(--bg-2);
+  padding: 30px 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.browse-titulo { font-size: 28px; padding: 18px 30px 10px; }
+#cat-list {
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+  padding: 6px 18px 30px;
+}
+#cat-list li {
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-size: 21px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 2px solid transparent;
+}
+#cat-list li.active { color: var(--text); background: var(--bg-3); }
+#cat-list li:focus {
+  outline: none;
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  background: var(--bg-3);
+}
+#cat-list .cat-badge {
+  float: right;
+  font-size: 16px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: 2px 10px;
+  margin-left: 8px;
+}
+
+.browse-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.browse-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 26px 36px 14px;
+}
+.browse-toolbar .btn { font-size: 20px; padding: 10px 22px; color: var(--text-muted); }
+.browse-info { color: var(--text-muted); font-size: 19px; }
+
+.items-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 36px 60px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 26px;
+  align-content: start;
+}
+.items-container.lista-canais { display: flex; flex-direction: column; gap: 10px; }
+
+/* Card de filme/série */
+.card {
+  background: var(--bg-2);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid transparent;
+}
+.card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: var(--bg-3); }
+.card .card-nome {
+  padding: 10px 12px;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card .card-fav {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.65);
+  display: flex; align-items: center; justify-content: center;
+}
+.card .card-fav svg { width: 22px; height: 22px; }
+.card .card-fav.is-fav svg { fill: var(--accent); }
+.card { position: relative; }
+.card .card-progress { position: absolute; left: 0; right: 0; bottom: 46px; height: 5px; background: rgba(0,0,0,.6); }
+.card .card-progress i { display: block; height: 100%; background: var(--accent); }
+
+/* Linha de canal */
+.canal-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: var(--bg-2);
+}
+.canal-row img { width: 74px; height: 52px; object-fit: contain; background: var(--bg-3); border-radius: 8px; }
+.canal-row .canal-nome { font-size: 22px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.canal-row .canal-prog { font-size: 17px; color: var(--text-muted); max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.canal-row.selected { border-color: var(--accent); background: var(--bg-3); }
+.canal-row:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); background: var(--bg-3); }
+
+.grid-vazio { grid-column: 1 / -1; color: var(--text-muted); font-size: 22px; padding: 60px 20px; text-align: center; }
+
+/* Painel EPG (lado direito, só ao vivo) */
+.epg-panel {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 460px;
+  background: var(--bg-2);
+  border-left: 1px solid var(--bg-3);
+  padding: 30px;
+  overflow-y: auto;
+}
+.epg-canal { font-size: 24px; margin-bottom: 18px; }
+.epg-conteudo { color: var(--text-muted); font-size: 19px; }
+.epg-prog { padding: 12px 0; border-bottom: 1px solid var(--bg-3); }
+.epg-prog .epg-hora { color: var(--accent); font-size: 17px; }
+.epg-prog.agora { color: var(--text); }
+.epg-prog.agora .epg-hora { font-weight: 700; }
+
+/* ============ DETALHES ============ */
+#screen-detail { overflow-y: auto; }
+.detail-bg {
+  position: fixed; inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.18;
+  filter: blur(2px);
+  z-index: 0;
+}
+.detail-voltar { position: absolute; top: 30px; left: 30px; z-index: 2; background: rgba(0,0,0,.5); }
+.detail-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 50px;
+  padding: 110px 70px 80px;
+  max-width: 1700px;
+}
+.detail-poster {
+  width: 340px;
+  border-radius: 16px;
+  align-self: flex-start;
+  background: var(--bg-3);
+}
+.detail-info { flex: 1; min-width: 0; }
+.detail-title { font-size: 46px; margin-bottom: 14px; }
+.detail-meta { color: var(--accent); font-size: 21px; margin-bottom: 20px; }
+.detail-desc {
+  color: var(--text-muted);
+  font-size: 21px;
+  line-height: 1.5;
+  max-width: 900px;
+  margin-bottom: 32px;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.detail-actions { display: flex; gap: 20px; margin-bottom: 40px; }
+
+.seasons-row { display: flex; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+.seasons-row .season-btn { padding: 12px 24px; font-size: 20px; }
+.seasons-row .season-btn.active { background: var(--accent); color: #fff; }
+
+.episodes-list { display: flex; flex-direction: column; gap: 14px; }
+.ep-row {
+  display: flex;
+  gap: 20px;
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 14px;
+  border: 2px solid transparent;
+  align-items: center;
+}
+.ep-row img { width: 160px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; background: var(--bg-3); }
+.ep-row .ep-info { flex: 1; min-width: 0; }
+.ep-row .ep-titulo { font-size: 21px; margin-bottom: 6px; }
+.ep-row .ep-sub { color: var(--accent); font-size: 17px; margin-bottom: 6px; }
+.ep-row .ep-desc { color: var(--text-muted); font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ep-row.assistido .ep-titulo::after { content: " ✓"; color: #22c55e; }
+
+/* ============ PLAYER ============ */
+#screen-player { background: #000; }
+#video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+
+.player-overlay {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background: rgba(0,0,0,0.75);
+  font-size: 26px;
+  z-index: 10;
+}
+#screen-player { position: relative; }
+
+.player-toast {
+  position: absolute;
+  top: 50px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  padding: 12px 30px;
+  border-radius: 30px;
+  font-size: 22px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 20;
+}
+.player-toast.visivel { opacity: 1; }
+
+.btn-proximo-ep {
+  position: absolute;
+  right: 60px; bottom: 120px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
+  padding: 18px 30px;
+  background: var(--accent);
+  color: #fff;
+  z-index: 15;
+}
+
+/* ============ TECLADO ============ */
+.screen.modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.82);
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.screen.modal.active { display: flex; }
+
+.keyboard-box {
+  width: 1060px;
+  background: var(--bg-2);
+  border-radius: 20px;
+  padding: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.kb-query-wrap { display: flex; gap: 16px; }
+.kb-query-wrap .input { flex: 1; }
+
+.kb-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.kb-linha { display: flex; gap: 10px; justify-content: center; }
+.kb-key {
+  min-width: 74px;
+  height: 62px;
+  padding: 0 14px;
+  font-size: 26px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kb-key.kb-wide { min-width: 150px; font-size: 20px; }
+
+.kb-footer { display: flex; align-items: center; justify-content: space-between; }
+.kb-dica { color: var(--text-muted); font-size: 18px; }
+
+/* ============ CONFIGURAÇÕES ============ */
+.settings-box {
+  width: 560px;
+  background: var(--bg-2);
+  border-radius: 20px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.settings-box h2 { font-size: 32px; }
+.settings-user { color: var(--text-muted); font-size: 19px; margin-bottom: 8px; }
+.settings-status { color: var(--accent); font-size: 18px; min-height: 22px; }
+
+/* ============ LOADER ============ */
+.loader {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  font-size: 26px;
+}
+
+.spinner {
+  width: 46px; height: 46px;
+  border: 5px solid var(--bg-3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: girar 0.9s linear infinite;
+}
+.spinner-big { width: 70px; height: 70px; border-width: 7px; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* Rolagem suave nos containers com scroll */
+.items-container, #cat-list, .epg-panel, #screen-detail { scrollbar-width: none; }
+.items-container::-webkit-scrollbar, #cat-list::-webkit-scrollbar { display: none; }
