@@ -1,169 +1,197 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Meu IPTV TV</title>
-<link rel="icon" type="image/svg+xml" href="icon.svg">
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meu IPTV</title>
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <!-- Pré-conexão TMDB (pôsteres/backdrops) -->
+  <link rel="preconnect" href="https://api.themoviedb.org" crossorigin>
+  <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<!-- ============ LOGIN (só aparece na 1ª configuração, sem credenciais salvas) ============ -->
-<section id="screen-login" class="screen">
-  <div class="login-box">
-    <h1 class="login-logo">Meu<span>IPTV</span></h1>
-    <p class="login-sub">Conecte-se com as credenciais do seu provedor</p>
-    <input id="login-dns" class="input" type="text" placeholder="dominio.com (DNS)" autocomplete="off">
-    <input id="login-user" class="input" type="text" placeholder="Usuário" autocomplete="off">
-    <input id="login-pass" class="input" type="password" placeholder="Senha">
-    <button id="btn-login" class="btn btn-primary btn-big">Conectar</button>
-    <p id="login-erro" class="login-erro"></p>
-  </div>
-</section>
-
-<!-- ============ MENU INICIAL (seletor) ============ -->
-<section id="screen-home" class="screen">
-  <header class="home-header">
-    <h1 class="logo">Meu<span>IPTV</span></h1>
-    <div class="home-header-right">
-      <span id="home-relogio" class="relogio"></span>
-      <button id="btn-settings" class="icon-btn" title="Configurações">
-        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
-      </button>
+  <!-- ===================== LOGIN ===================== -->
+  <section id="screen-login" class="screen active">
+    <div class="login-decor decor-1"></div>
+    <div class="login-decor decor-2"></div>
+    <div class="login-decor decor-3"></div>
+    <div class="login-box">
+      <div class="login-logo">
+        <img src="icon.svg" alt="">
+        <span>Meu<em>IPTV</em></span>
+      </div>
+      <h1>Bem-vindo</h1>
+      <p class="login-sub">Conecte-se com as credenciais do seu provedor</p>
+      <div class="field">
+        <label for="login-dns">DNS do provedor</label>
+        <input id="login-dns" class="input" type="text" placeholder="ex: provedor.com" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="login-user">Usuário</label>
+        <input id="login-user" class="input" type="text" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="login-pass">Senha</label>
+        <input id="login-pass" class="input" type="password">
+      </div>
+      <p id="login-erro" class="login-erro"></p>
+      <button id="btn-login" class="btn btn-primary btn-block">Entrar</button>
     </div>
-  </header>
+  </section>
 
-  <div class="menu-grid">
-    <button class="menu-tile" data-goto="live">
-      <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12zM8 9.5l6 3.5-6 3.5z"/></svg>
-      <span>TV ao Vivo</span>
-    </button>
-    <button class="menu-tile" data-goto="vod">
-      <svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
-      <span>Filmes</span>
-    </button>
-    <button class="menu-tile" data-goto="series">
-      <svg viewBox="0 0 24 24"><path d="M4 8h16V6H4v2zm0 4h10v-2H4v2zm0 8h6v-2H4v2zm14.5-8L19 10.5 15.5 7 14 8.5l3.5 3.5L14 15.5 15.5 17 19 13.5 22.5 17 24 15.5 20.5 12 24 8.5 22.5 7z"/></svg>
-      <span>Séries</span>
-    </button>
-  </div>
-
-  <div id="home-continue" class="home-continue hidden">
-    <h2 class="row-title">Continuar Assistindo</h2>
-    <div id="home-continue-row" class="h-row"></div>
-  </div>
-</section>
-
-<!-- ============ NAVEGAÇÃO (ao vivo / filmes / séries) ============ -->
-<section id="screen-browse" class="screen">
-  <aside id="browse-sidebar">
-    <button id="btn-voltar-menu" class="btn-voltar">
-      <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-      Menu
-    </button>
-    <h2 id="browse-titulo" class="browse-titulo">TV ao Vivo</h2>
-    <ul id="cat-list"></ul>
-  </aside>
-
-  <div class="browse-main">
-    <div class="browse-toolbar">
-      <button id="btn-buscar" class="btn">
-        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-        Buscar
-      </button>
-      <span id="browse-info" class="browse-info"></span>
-    </div>
-    <div id="items-container" class="items-container"></div>
-    <div id="epg-panel" class="epg-panel hidden">
-      <h3 id="epg-canal" class="epg-canal"></h3>
-      <div id="epg-conteudo" class="epg-conteudo">Carregando programação...</div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ DETALHES (filme/série) ============ -->
-<section id="screen-detail" class="screen">
-  <div class="detail-bg" id="detail-bg"></div>
-  <button id="btn-detail-voltar" class="btn-voltar detail-voltar">
-    <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Voltar
-  </button>
-  <div class="detail-content">
-    <img id="detail-poster" class="detail-poster" src="" alt="">
-    <div class="detail-info">
-      <h1 id="detail-title" class="detail-title"></h1>
-      <div id="detail-meta" class="detail-meta"></div>
-      <p id="detail-desc" class="detail-desc"></p>
-      <div class="detail-actions">
-        <button id="btn-play" class="btn btn-primary btn-big">
-          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <span id="btn-play-label">Assistir</span>
-        </button>
-        <button id="btn-fav-detail" class="btn">
-          <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-          <span id="btn-fav-label">Favorito</span>
+  <!-- ===================== HOME / MENU ===================== -->
+  <section id="screen-home" class="screen">
+    <header class="topbar">
+      <div class="brand">
+        <img src="icon.svg" alt="">
+        <span>Meu<em>IPTV</em></span>
+      </div>
+      <div class="topbar-right">
+        <span id="home-relogio" class="relogio">--:--</span>
+        <button id="btn-settings" class="icon-btn" title="Configurações">
+          <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
         </button>
       </div>
-      <div id="seasons-row" class="seasons-row hidden"></div>
-      <div id="episodes-list" class="episodes-list"></div>
-    </div>
-  </div>
-</section>
+    </header>
 
-<!-- ============ PLAYER TELA CHEIA ============ -->
-<section id="screen-player" class="screen">
-  <video id="video" controls preload="auto"></video>
-  <div id="player-carregando" class="player-overlay">
-    <div class="spinner"></div>
-    <p>Carregando...</p>
-  </div>
-  <div id="player-erro" class="player-overlay hidden">
-    <p id="player-erro-msg">Não foi possível reproduzir.</p>
-    <button id="btn-retry" class="btn btn-primary">Tentar novamente</button>
-  </div>
-  <button id="btn-proximo-ep" class="btn-proximo-ep hidden">
-    <span>Próximo episódio</span>
-    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-  </button>
-  <div id="player-toast" class="player-toast"></div>
-</section>
+    <main class="home-main">
+      <h2 class="home-ola">O que você quer assistir?</h2>
 
-<!-- ============ TECLADO NA TELA ============ -->
-<section id="screen-keyboard" class="screen modal">
-  <div class="keyboard-box">
-    <div class="kb-query-wrap">
-      <input id="kb-query" class="input" type="text" placeholder="Digite para buscar..." readonly>
-      <button id="kb-clear" class="icon-btn" title="Limpar">
+      <div class="menu-tiles">
+        <button class="menu-tile tile-live" data-goto="live">
+          <svg viewBox="0 0 24 24"><path d="M21 6h-7.59l3.29-3.29L16 2l-4 4-4-4-.71.71L10.59 6H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 14H3V8h18v12zM9 10v8l7-4z"/></svg>
+          <span>TV ao Vivo</span>
+        </button>
+        <button class="menu-tile tile-vod" data-goto="vod">
+          <svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
+          <span>Filmes</span>
+        </button>
+        <button class="menu-tile tile-series" data-goto="series">
+          <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8 12.5v-9l6 4.5-6 4.5z"/></svg>
+          <span>Séries</span>
+        </button>
+      </div>
+
+      <div id="home-continue" class="home-continue hidden">
+        <h3>Continuar Assistindo</h3>
+        <div id="home-continue-row" class="continue-row"></div>
+      </div>
+    </main>
+  </section>
+
+  <!-- ===================== NAVEGAÇÃO (ao vivo / vod / séries) ===================== -->
+  <section id="screen-browse" class="screen">
+    <header class="topbar">
+      <button id="btn-voltar-menu" class="icon-btn" title="Voltar ao menu">
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <h2 id="browse-titulo" class="topbar-title">Filmes</h2>
+      <div class="topbar-right">
+        <button id="btn-buscar" class="icon-btn" title="Buscar">
+          <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Barra de busca: foca o input e ABRE o teclado nativo da TV -->
+    <div id="search-bar" class="search-bar hidden">
+      <svg class="search-icone" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <input id="search-input" class="input" type="text" placeholder="Buscar..." autocomplete="off">
+      <button id="btn-search-close" class="icon-btn" title="Fechar busca">
         <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
       </button>
     </div>
-    <div id="kb-grid" class="kb-grid"></div>
-    <div class="kb-footer">
-      <button id="kb-fechar" class="btn">Fechar</button>
-      <span class="kb-dica">OK = digitar • Voltar = fechar</span>
+
+    <div class="browse-main">
+      <aside class="sidebar">
+        <ul id="cat-list" class="cat-list"></ul>
+      </aside>
+
+      <div class="content-area">
+        <div class="browse-toolbar">
+          <span id="browse-info" class="browse-info"></span>
+        </div>
+        <div id="items-container" class="items-container"></div>
+      </div>
+
+      <aside id="epg-panel" class="epg-panel hidden">
+        <h3 id="epg-canal">Canal</h3>
+        <div id="epg-conteudo">Passe o foco sobre um canal para ver a programação.</div>
+      </aside>
     </div>
+  </section>
+
+  <!-- ===================== DETALHES ===================== -->
+  <section id="screen-detail" class="screen">
+    <div id="detail-bg" class="detail-bg"></div>
+    <div class="detail-content">
+      <button id="btn-detail-voltar" class="icon-btn detail-voltar" title="Voltar">
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+      <div class="detail-grid">
+        <img id="detail-poster" class="detail-poster" src="" alt="">
+        <div class="detail-info">
+          <h2 id="detail-title"></h2>
+          <p id="detail-meta" class="detail-meta"></p>
+          <p id="detail-desc" class="detail-desc"></p>
+          <div class="detail-actions">
+            <button id="btn-play" class="btn btn-primary">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <span id="btn-play-label">Assistir</span>
+            </button>
+            <button id="btn-fav-detail" class="btn btn-ghost">
+              <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+              <span id="btn-fav-label">Favorito</span>
+            </button>
+          </div>
+          <div id="seasons-row" class="seasons-row hidden"></div>
+          <div id="episodes-list" class="episodes-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PLAYER ===================== -->
+  <section id="screen-player" class="screen">
+    <video id="video" controls playsinline></video>
+    <div id="player-carregando" class="player-carregando">
+      <div class="spinner"></div>
+    </div>
+    <div id="player-erro" class="player-erro hidden">
+      <p id="player-erro-msg">Não foi possível reproduzir.</p>
+      <div class="player-erro-acoes">
+        <button id="btn-retry" class="btn btn-primary">Tentar novamente</button>
+        <button id="btn-voltar-player" class="btn btn-ghost">Voltar</button>
+      </div>
+    </div>
+    <button id="btn-proximo-ep" class="btn btn-primary btn-proximo-ep hidden">Próximo Episódio</button>
+    <div id="player-toast" class="player-toast"></div>
+  </section>
+
+  <!-- ===================== CONFIGURAÇÕES ===================== -->
+  <section id="screen-settings" class="screen">
+    <div class="settings-box">
+      <h2>Configurações</h2>
+      <p class="settings-user" id="settings-user"></p>
+      <div class="settings-acoes">
+        <button id="btn-atualizar-catalogo" class="btn btn-primary btn-block">Atualizar catálogo agora</button>
+        <button id="btn-logout" class="btn btn-danger btn-block">Sair da conta</button>
+        <button id="btn-settings-fechar" class="btn btn-ghost btn-block">Fechar</button>
+      </div>
+      <p id="settings-status" class="settings-status"></p>
+    </div>
+  </section>
+
+  <!-- ===================== LOADER GLOBAL ===================== -->
+  <div id="loader" class="loader hidden">
+    <div class="spinner"></div>
+    <p id="loader-texto">Carregando...</p>
   </div>
-</section>
 
-<!-- ============ CONFIGURAÇÕES ============ -->
-<section id="screen-settings" class="screen modal">
-  <div class="settings-box">
-    <h2>Configurações</h2>
-    <p id="settings-user" class="settings-user"></p>
-    <button id="btn-atualizar-catalogo" class="btn btn-primary">Atualizar catálogo</button>
-    <button id="btn-logout" class="btn btn-danger">Sair da conta</button>
-    <button id="btn-settings-fechar" class="btn">Fechar</button>
-    <p id="settings-status" class="settings-status"></p>
-  </div>
-</section>
-
-<!-- ============ LOADER GLOBAL ============ -->
-<div id="loader" class="loader hidden">
-  <div class="spinner spinner-big"></div>
-  <p id="loader-texto">Carregando...</p>
-</div>
-
-<script src="js/app.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
