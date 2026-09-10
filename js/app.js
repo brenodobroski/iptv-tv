@@ -518,3 +518,570 @@ function assistirCanal(item) {
   const url = urlCanal(item);
   abrirPlayer(url, { id: item.stream_id, name: item.name, url, aba: 'live', logo: item.stream_icon });
 }
+
+
+/* ============================================================
+   TELA DE DETALHES (filme/série)
+   ============================================================ */
+let episodiosFlat = [];        // episódios da série aberta (plano, p/ "próximo ep")
+let temporadaAtual = null;
+let telaAntesDoPlayer = 'screen-home';
+
+function abrirDetalhes(id, secao) {
+  const item = (db[secao] || []).find(i => String(i.series_id || i.stream_id) === String(id));
+  if (!item) return;
+  mediaAtual = { id: item.series_id || item.stream_id, secao, dados: item };
+
+  $('detail-bg').style.backgroundImage = '';
+  $('detail-poster').src = item.stream_icon || item.cover || SVG_FALLBACK;
+  $('detail-title').textContent = item.name || '';
+  $('detail-meta').textContent = '';
+  $('detail-desc').textContent = '';
+  $('episodes-list').innerHTML = '';
+  $('seasons-row').innerHTML = '';
+  $('seasons-row').classList.add('hidden');
+  episodiosFlat = [];
+
+  mostrarTela('screen-detail');
+  focarPrimeiro($('screen-detail'));
+
+  if (secao === 'series') {
+    carregarInfoSerie(item);
+  } else {
+    const hist = historico[mediaAtual.id];
+    const pct = hist && hist.percent ? Math.round(hist.percent * 100) : 0;
+    $('detail-meta').textContent = pct > 0 && pct < 95 ? 'Assistido ' + pct + '%' : '';
+    $('detail-desc').textContent = 'Filme disponível no seu provedor.';
+    $('btn-play-label').textContent = (pct > 0 && pct < 95) ? 'Continuar (' + pct + '%)' : 'Assistir';
+  }
+  atualizarBotaoFavDetail();
+}
+
+async function carregarInfoSerie(item) {
+  $('detail-desc').textContent = 'Carregando informações...';
+  try {
+    const info = await fetchAPI('get_series_info', '&series_id=' + item.series_id);
+    const caixa = $('episodes-list');
+
+    // Sinopse
+    let sinopse = '';
+    try {
+      const primeiroEp = info && info.episodes ? Object.values(info.episodes)[0] : null;
+      if (primeiroEp && primeiroEp[0] && primeiroEp[0].info && primeiroEp[0].info.plot) {
+        sinopse = primeiroEp[0].info.plot;
+      }
+    } catch (e) {}
+    if (!sinopse && info && info.info) sinopse = info.info.plot || '';
+    $('detail-desc').textContent = sinopse || 'Série disponível no seu provedor.';
+
+    if (!info || !info.episodes) {
+      caixa.innerHTML = '<div class="grid-vazio">Nenhum episódio encontrado.</div>';
+      return;
+    }
+
+    // Temporadas em ordem numérica
+    const temps = Object.keys(info.episodes).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    temps.forEach(t => {
+      (info.episodes[t] || []).forEach(ep => {
+        episodiosFlat.push({ temporada: t, ep: ep });
+      });
+    });
+
+    // Barra de temporadas
+    const barra = $('seasons-row');
+    barra.innerHTML = '';
+    if (temps.length > 1) {
+      barra.classList.remove('hidden');
+      temps.forEach(t => {
+        const b = document.createElement('button');
+        b.className = 'season-btn';
+        b.textContent = 'T' + t;
+        b.addEventListener('click', () => {
+          temporadaAtual = t;
+          barra.querySelectorAll('.season-btn').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          renderizarEpisodios(info.episodes[t]);
+        });
+        barra.appendChild(b);
+      });
+    }
+
+    temporadaAtual = temps[0];
+    const btnT0 = barra.querySelector('.season-btn');
+    if (btnT0) btnT0.classList.add('active');
+    renderizarEpisodios(info.episodes[temporadaAtual]);
+
+    // Rótulo do botão principal: continuar do último episódio assistido
+    const ultimo = episodiosFlat
+      .map(e => e.ep.id)
+      .map(eid => historico[eid])
+      .filter(Boolean)
+      .sort((a, b) => b.timestamp - a.timestamp)[0];
+    $('btn-play-label').textContent = ultimo ? 'Continuar: ' + ultimo.name : 'Assistir';
+  } catch (e) {
+    $('detail-desc').textContent = 'Falha ao carregar episódios.';
+  }
+}
+
+function renderizarEpisodios(episodios) {
+  const caixa = $('episodes-list');
+  caixa.innerHTML = '';
+  if (!episodios || episodios.length === 0) {
+    caixa.innerHTML = '<div class="grid-vazio">Nenhum episódio nesta temporada.</div>';
+    return;
+  }
+  episodios.forEach(ep => {
+    const id = ep.id || ep.episode_id;
+    const nomeEp = ep.title ? decodificarEPG(ep.title) : ('Episódio ' + (ep.episode_num || ''));
+    const assistido = completados.has(String(id));
+    const linha = document.createElement('button');
+    linha.className = 'ep-row' + (assistido ? ' assistido' : '');
+    const capa = (ep.info && ep.info.movie_image) ? ep.info.movie_image : SVG_FALLBACK;
+    linha.innerHTML =
+      '<img src="' + capa + '" onerror="imgErro(this)" loading="lazy">' +
+      '<div class="ep-info">' +
+        '<div class="ep-titulo">E' + (ep.episode_num || '?') + ' — ' + escapar(nomeEp) + '</div>' +
+        (ep.info && ep.info.duration ? '<div class="ep-sub">' + escapar(ep.info.duration) + '</div>' : '') +
+      '</div>';
+    linha.addEventListener('click', () => playEpisodio(ep));
+    caixa.appendChild(linha);
+  });
+}
+
+function playEpisodio(ep) {
+  const id = ep.id || ep.episode_id;
+  const ext = (ep.container_extension || 'mp4');
+  const url = credenciais.host + '/series/' + credenciais.user + '/' + credenciais.pass +
+              '/' + id + '.' + ext;
+  const nomeEp = ep.title ? decodificarEPG(ep.title) : ('Episódio ' + (ep.episode_num || ''));
+  const capa = (ep.info && ep.info.movie_image) || (mediaAtual && mediaAtual.dados.cover) || '';
+  abrirPlayer(url, {
+    id: id,
+    name: (mediaAtual ? mediaAtual.dados.name + ' — ' : '') + nomeEp,
+    url: url,
+    aba: 'series',
+    logo: capa
+  });
+}
+
+function atualizarBotaoFavDetail() {
+  if (!mediaAtual) return;
+  const fav = favoritos[mediaAtual.secao].includes(mediaAtual.id);
+  $('btn-fav-label').textContent = fav ? 'Remover Favorito' : 'Favorito';
+}
+
+function voltarDoDetalhe() {
+  if (secaoAtual === 'home') { entrarNoMenu(); return; }
+  mostrarTela('screen-browse');
+  focarPrimeiro($('screen-browse'));
+}
+
+/* ============================================================
+   PLAYER
+   ============================================================ */
+function urlFilme(item) {
+  const ext = item.container_extension || 'mp4';
+  return credenciais.host + '/movie/' + credenciais.user + '/' + credenciais.pass +
+         '/' + item.stream_id + '.' + ext;
+}
+
+function abrirPlayer(url, dados) {
+  telaAntesDoPlayer = document.querySelector('.screen.active') ?
+    document.querySelector('.screen.active').id : 'screen-home';
+  videoAtual = dados;
+  const video = $('video');
+
+  $('player-erro').classList.add('hidden');
+  $('player-carregando').classList.remove('hidden');
+  $('btn-proximo-ep').classList.add('hidden');
+
+  mostrarTela('screen-player');
+  focarPrimeiro($('screen-player'));
+
+  video.src = montarUrlProxy(url);
+
+  // Continuar de onde parou
+  const hist = historico[dados.id];
+  const aoCarregar = () => {
+    if (hist && hist.percent > 0.02 && hist.percent < 0.95 && video.duration) {
+      try { video.currentTime = hist.percent * video.duration; } catch (e) {}
+    }
+    $('player-carregando').classList.add('hidden');
+    video.removeEventListener('loadedmetadata', aoCarregar);
+  };
+  video.addEventListener('loadedmetadata', aoCarregar);
+  video.play().catch(() => {});
+}
+
+function registrarProgresso() {
+  if (!videoAtual) return;
+  const video = $('video');
+  if (!video.duration || !isFinite(video.duration)) return;
+  const percent = video.currentTime / video.duration;
+  if (percent > 0.95 && video.duration > 60) {
+    marcarCompleto(videoAtual.id);
+    delete historico[videoAtual.id];
+    salvarHistorico();
+    return;
+  }
+  historico[videoAtual.id] = {
+    id: videoAtual.id,
+    name: videoAtual.name,
+    url: videoAtual.url,
+    aba: videoAtual.aba,
+    logo: videoAtual.logo || '',
+    timestamp: Date.now(),
+    percent: percent,
+    duration: video.duration
+  };
+  salvarHistorico();
+}
+
+function sairDoPlayer() {
+  registrarProgresso();
+  forcarPararVideo();
+  videoAtual = null;
+  if (telaAntesDoPlayer === 'screen-detail') {
+    mostrarTela('screen-detail');
+    focarPrimeiro($('screen-detail'));
+  } else if (telaAntesDoPlayer === 'screen-browse') {
+    mostrarTela('screen-browse');
+    focarPrimeiro($('screen-browse'));
+  } else {
+    entrarNoMenu();
+  }
+}
+
+function forcarPararVideo() {
+  const video = $('video');
+  if (!video) return;
+  video.pause();
+  video.removeAttribute('src');
+  try { video.load(); } catch (e) {}
+}
+
+function proximoEpisodioDisponivel() {
+  if (!videoAtual || videoAtual.aba !== 'series' || episodiosFlat.length === 0) return null;
+  const idx = episodiosFlat.findIndex(e => String(e.ep.id || e.ep.episode_id) === String(videoAtual.id));
+  if (idx >= 0 && idx < episodiosFlat.length - 1) return episodiosFlat[idx + 1].ep;
+  return null;
+}
+
+function mostrarBotaoProximoEp() {
+  const proximo = proximoEpisodioDisponivel();
+  if (!proximo) return;
+  $('btn-proximo-ep').classList.remove('hidden');
+}
+
+function tocarProximoEpisodio() {
+  const proximo = proximoEpisodioDisponivel();
+  if (proximo) playEpisodio(proximo);
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = $('player-toast');
+  el.textContent = msg;
+  el.classList.add('visivel');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('visivel'), 2500);
+}
+
+/* ============================================================
+   TECLADO VIRTUAL (busca)
+   ============================================================ */
+const TECLADO_LINHAS = [
+  ['1','2','3','4','5','6','7','8','9','0'],
+  ['Q','W','E','R','T','Y','U','I','O','P'],
+  ['A','S','D','F','G','H','J','K','L'],
+  ['Z','X','C','V','B','N','M'],
+  ['ESPAÇO','⌫','LIMPAR','OK']
+];
+
+function montarTeclado() {
+  const grade = $('kb-grid');
+  grade.innerHTML = '';
+  TECLADO_LINHAS.forEach(linha => {
+    const divLinha = document.createElement('div');
+    divLinha.className = 'kb-linha';
+    linha.forEach(ch => {
+      const tecla = document.createElement('button');
+      tecla.className = 'kb-key' + (ch.length > 1 ? ' kb-wide' : '');
+      tecla.textContent = ch;
+      tecla.addEventListener('click', () => teclaAcao(ch));
+      divLinha.appendChild(tecla);
+    });
+    grade.appendChild(divLinha);
+  });
+}
+
+function teclaAcao(ch) {
+  if (ch === '⌫') termoBusca = termoBusca.slice(0, -1);
+  else if (ch === 'LIMPAR') termoBusca = '';
+  else if (ch === 'OK') { fecharTeclado(); return; }
+  else if (ch === 'ESPAÇO') termoBusca += ' ';
+  else termoBusca += ch.toLowerCase();
+  $('kb-query').value = termoBusca;
+  aplicarFiltro();
+}
+
+function abrirTeclado() {
+  $('kb-query').value = termoBusca;
+  mostrarTela('screen-keyboard');
+  focarPrimeiro($('screen-keyboard'));
+}
+
+function fecharTeclado() {
+  mostrarTela('screen-browse');
+  focarPrimeiro($('screen-browse'));
+}
+
+/* ============================================================
+   CONFIGURAÇÕES
+   ============================================================ */
+function abrirSettings() {
+  $('settings-user').textContent = credenciais.user ?
+    (credenciais.user + ' @ ' + credenciais.host.replace(/^https?:\/\//, '')) : 'Sem conta conectada';
+  $('settings-status').textContent = '';
+  mostrarTela('screen-settings');
+  focarPrimeiro($('screen-settings'));
+}
+
+function fecharSettings() {
+  entrarNoMenu();
+}
+
+function fazerLogout() {
+  ['iptv_user', 'iptv_pass', 'iptv_dns', 'iptv_profile'].forEach(k => localStorage.removeItem(k));
+  localStorage.removeItem(CHAVE_CACHE);
+  credenciais = { host: '', user: '', pass: '' };
+  db = { live: [], vod: [], series: [] };
+  cats = { live: [], vod: [], series: [] };
+  dataLoaded = false;
+  forcarPararVideo();
+  mostrarTela('screen-login');
+  focarPrimeiro($('screen-login'));
+}
+
+/* ============================================================
+   NAVEGAÇÃO POR CONTROLE REMOTO / TECLADO
+   ============================================================ */
+function focavel(el) {
+  if (!el || el.disabled) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
+}
+
+function focarPrimeiro(tela) {
+  if (!tela) return;
+  const alvo = tela.querySelector('button, input, li[tabindex]');
+  if (alvo && focavel(alvo)) { alvo.focus(); return; }
+  // fallback: qualquer focável visível na tela
+  const todos = tela.querySelectorAll('button, input, li[tabindex]');
+  for (const el of todos) {
+    if (focavel(el)) { el.focus(); return; }
+  }
+}
+
+function focarPrimeiroItem() {
+  const primeiro = $('items-container').querySelector('button.card, button.canal-row');
+  if (primeiro) primeiro.focus();
+}
+
+function moverFoco(direcao) {
+  const ativo = document.activeElement;
+  if (!ativo || ativo === document.body) {
+    const tela = document.querySelector('.screen.active');
+    if (tela) focarPrimeiro(tela);
+    return;
+  }
+  const todos = Array.from(document.querySelectorAll('.screen.active button, .screen.active input, .screen.active li[tabindex]')).filter(focavel);
+  if (todos.length === 0) return;
+  const rA = ativo.getBoundingClientRect();
+  const cxA = rA.left + rA.width / 2, cyA = rA.top + rA.height / 2;
+  let melhor = null, melhorDist = Infinity;
+
+  todos.forEach(el => {
+    if (el === ativo) return;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const dx = cx - cxA, dy = cy - cyA;
+    let valido = false, dist = Infinity;
+    if (direcao === 'left' && dx < -10) { valido = true; dist = Math.abs(dx) + Math.abs(dy) * 3; }
+    if (direcao === 'right' && dx > 10) { valido = true; dist = Math.abs(dx) + Math.abs(dy) * 3; }
+    if (direcao === 'up' && dy < -10) { valido = true; dist = Math.abs(dy) + Math.abs(dx) * 3; }
+    if (direcao === 'down' && dy > 10) { valido = true; dist = Math.abs(dy) + Math.abs(dx) * 3; }
+    if (valido && dist < melhorDist) { melhorDist = dist; melhor = el; }
+  });
+
+  if (melhor) melhor.focus();
+}
+
+function acaoVoltar() {
+  // Ordem de prioridade: teclado > config > player > detalhe > browse
+  if ($('screen-keyboard').classList.contains('active')) { fecharTeclado(); return; }
+  if ($('screen-settings').classList.contains('active')) { fecharSettings(); return; }
+  if ($('screen-player').classList.contains('active')) {
+    sairDoPlayer();
+    return;
+  }
+  if ($('screen-detail').classList.contains('active')) { voltarDoDetalhe(); return; }
+  if ($('screen-browse').classList.contains('active')) { voltarMenu(); return; }
+}
+
+document.addEventListener('keydown', (e) => {
+  const mapa = {
+    ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down'
+  };
+  if (mapa[e.key]) {
+    // No player, as setas controlam o vídeo (o próprio <video> com controls)
+    if (!$('screen-player').classList.contains('active')) {
+      e.preventDefault();
+      moverFoco(mapa[e.key]);
+    }
+    return;
+  }
+  if (e.key === 'Enter' || e.key === 'OK') {
+    if (document.activeElement && document.activeElement.click) {
+      document.activeElement.click();
+    }
+    return;
+  }
+  if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'GoBack' ||
+      e.key === 'XF86Back' || e.keyCode === 10009 || e.keyCode === 461) {
+    e.preventDefault();
+    acaoVoltar();
+  }
+});
+
+/* ============================================================
+   LOGIN + INICIALIZAÇÃO
+   ============================================================ */
+function fazerLogin() {
+  let dns = $('login-dns').value.trim();
+  const user = $('login-user').value.trim();
+  const pass = $('login-pass').value.trim();
+  $('login-erro').textContent = '';
+
+  if (!dns || !user || !pass) {
+    $('login-erro').textContent = 'Preencha DNS, usuário e senha.';
+    return;
+  }
+  if (!/^https?:\/\//i.test(dns)) dns = 'http://' + dns;
+  dns = dns.replace(/\/+$/, '');
+
+  credenciais.host = dns;
+  credenciais.user = user;
+  credenciais.pass = pass;
+
+  localStorage.setItem('iptv_dns', dns);
+  localStorage.setItem('iptv_user', user);
+  localStorage.setItem('iptv_pass', pass);
+
+  carregarCatalogo();
+}
+
+function iniciar() {
+  montarTeclado();
+
+  // Eventos dos botões estáticos do HTML
+  $('btn-login').addEventListener('click', fazerLogin);
+  [$('login-dns'), $('login-user'), $('login-pass')].forEach(inp => {
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') fazerLogin(); });
+  });
+
+  document.querySelectorAll('.menu-tile').forEach(btn => {
+    btn.addEventListener('click', () => irParaSecao(btn.getAttribute('data-goto')));
+  });
+
+  $('btn-settings').addEventListener('click', abrirSettings);
+  $('btn-voltar-menu').addEventListener('click', voltarMenu);
+  $('btn-buscar').addEventListener('click', abrirTeclado);
+  $('kb-fechar').addEventListener('click', fecharTeclado);
+  $('kb-clear').addEventListener('click', () => { termoBusca = ''; $('kb-query').value = ''; aplicarFiltro(); });
+  $('btn-atualizar-catalogo').addEventListener('click', atualizarCatalogo);
+  $('btn-logout').addEventListener('click', fazerLogout);
+  $('btn-settings-fechar').addEventListener('click', fecharSettings);
+  $('btn-detail-voltar').addEventListener('click', voltarDoDetalhe);
+
+  $('btn-play').addEventListener('click', () => {
+    if (!mediaAtual) return;
+    if (mediaAtual.secao === 'series') {
+      // Continuar do episódio mais recente com progresso, senão o primeiro
+      const comHist = episodiosFlat
+        .filter(e => historico[e.ep.id || e.ep.episode_id])
+        .sort((a, b) => (historico[b.ep.id || b.ep.episode_id].timestamp || 0) -
+                         (historico[a.ep.id || a.ep.episode_id].timestamp || 0));
+      const alvo = comHist.length ? comHist[0].ep : (episodiosFlat[0] && episodiosFlat[0].ep);
+      if (alvo) playEpisodio(alvo);
+    } else {
+      const item = mediaAtual.dados;
+      const url = urlFilme(item);
+      abrirPlayer(url, {
+        id: item.stream_id, name: item.name, url: url, aba: 'vod',
+        logo: item.stream_icon || ''
+      });
+    }
+  });
+
+  $('btn-fav-detail').addEventListener('click', () => {
+    if (!mediaAtual) return;
+    alternarFavorito(mediaAtual.id, mediaAtual.secao, null);
+  });
+
+  $('btn-retry').addEventListener('click', () => {
+    if (videoAtual) abrirPlayer(videoAtual.url, videoAtual);
+  });
+  $('btn-proximo-ep').addEventListener('click', tocarProximoEpisodio);
+
+  // Eventos do <video>
+  const video = $('video');
+  video.addEventListener('error', () => {
+    if (!videoAtual) return;
+    $('player-carregando').classList.add('hidden');
+    $('player-erro-msg').textContent = 'Não foi possível reproduzir.';
+    $('player-erro').classList.remove('hidden');
+  });
+  video.addEventListener('waiting', () => $('player-carregando').classList.remove('hidden'));
+  video.addEventListener('playing', () => {
+    $('player-carregando').classList.add('hidden');
+    $('player-erro').classList.add('hidden');
+  });
+  video.addEventListener('timeupdate', () => {
+    if (video.duration && video.currentTime > 5) registrarProgresso();
+  });
+  video.addEventListener('ended', () => {
+    registrarProgresso();
+    if (videoAtual && videoAtual.aba === 'series') {
+      const proximo = proximoEpisodioDisponivel();
+      if (proximo) {
+        mostrarBotaoProximoEp();
+        toast('Episódio finalizado');
+        setTimeout(() => { if (videoAtual) tocarProximoEpisodio(); }, 4000);
+      } else {
+        toast('Fim da série');
+      }
+    }
+  });
+
+  // Relógio da home
+  setInterval(() => {
+    if ($('screen-home').classList.contains('active')) renderizarHome();
+  }, 30000);
+
+  // Entrada: credenciais salvas? Vai direto pro menu. Senão, login.
+  const salvoDns = localStorage.getItem('iptv_dns');
+  const salvoUser = localStorage.getItem('iptv_user');
+  const salvoPass = localStorage.getItem('iptv_pass');
+  if (salvoDns && salvoUser && salvoPass) {
+    credenciais.host = salvoDns;
+    credenciais.user = salvoUser;
+    credenciais.pass = salvoPass;
+    carregarCatalogo();
+  } else {
+    mostrarTela('screen-login');
+    focarPrimeiro($('screen-login'));
+  }
+}
+
+document.addEventListener('DOMContentLoaded', iniciar);
