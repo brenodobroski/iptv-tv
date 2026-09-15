@@ -1,0 +1,1 @@
+luna-send -n 1 -f luna://com.webos.appInstallService/install '{"id":"com.seunome.meuiptv","ipkUrl":"/tmp/com.seunome.meuiptv_1.0.0_all.ipk","subscribe":true}'

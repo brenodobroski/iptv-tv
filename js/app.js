@@ -1,11 +1,11 @@
 /* ============================================================
-   Meu IPTV — versão TV com visual web (azul) + TMDB
-   - Pôsteres/backdrops/títulos do TMDB (cache 7 dias)
-   - Busca abre o teclado NATIVO da TV (input focado, sem teclado virtual)
-   - Ao vivo via hls.js: buffer grande elimina o travamento "imagem a imagem"
-   - Player sem controls nativo:
-       • TV ao vivo  -> NENHUMA barra (só assiste; Voltar sai)
-       • Filmes/séries -> play/pause, ±10s, progresso (sem volume/tela cheia)
+   Meu IPTV — versão TV webOS (azul) + TMDB
+   - Login com http:// fixo | TMDB | busca com teclado nativo
+   - TV ao vivo: mini player no painel; OK no canal toca no mini;
+     OK no mini = tela cheia; Voltar volta e continua tocando;
+     SEGURAR OK no canal = favoritar
+   - Séries: blur no fundo, card "próximo ep" com contagem nos
+     últimos 10s, episódio 100% visto com selo na lista
    ============================================================ */
 'use strict';
 
@@ -17,31 +17,36 @@ let db = { live: [], vod: [], series: [] };
 let cats = { live: [], vod: [], series: [] };
 let dataLoaded = false;
 
-let secaoAtual = 'home';        // home | live | vod | series
+let secaoAtual = 'home';
 let catAtual = null;
 let dadosAtuais = [];
-let canalSelecionado = null;
 let mediaAtual = null;
 let videoAtual = null;
 let buscaAberta = false;
-let hls = null;                 // instância do hls.js (HLS ao vivo)
-let controlesTimer = null;      // esconde a barra de controles após inatividade
+let hls = null;                 // hls.js do player em tela cheia
+let miniHls = null;             // hls.js do mini player ao vivo
+let canalMini = null;           // dados do canal tocando no mini
+let controlesTimer = null;
 
 function destruirHls() {
   if (hls) { try { hls.destroy(); } catch (e) {} hls = null; }
 }
 
+/* OK do controle: nem sempre chega como e.key === 'Enter' */
+function ehTeclaOK(e) {
+  return e.key === 'Enter' || e.keyCode === 13 || e.which === 13;
+}
+
 /* ---------------- TMDB ---------------- */
 const TMDB_KEY = 'c5ec5dbd66ea50ce62b096dca322543c';
 const TMDB_CACHE_KEY = 'iptv_tmdb_cache_v2';
-const TMDB_TTL = 7 * 24 * 60 * 60 * 1000; // 7 dias
+const TMDB_TTL = 7 * 24 * 60 * 60 * 1000;
 let tmdbCache = carregarJSON(TMDB_CACHE_KEY, {});
 
 function salvarTmdbCache() {
   try { localStorage.setItem(TMDB_CACHE_KEY, JSON.stringify(tmdbCache)); } catch (e) {}
 }
 
-/* Limpa sujeira típica do nome no provedor: [4K], (2023), qualidade etc. */
 function limparNomeMidia(nome) {
   if (!nome) return '';
   let n = String(nome);
@@ -71,7 +76,6 @@ async function buscarTMDB(nomeOriginal, tipo) {
       resultado = {
         id: r.id,
         titulo: r.title || r.name || '',
-        original: r.original_title || r.original_name || '',
         sinopse: r.overview || '',
         poster: r.poster_path ? 'https://image.tmdb.org/t/p/w500' + r.poster_path : null,
         backdrop: r.backdrop_path ? 'https://image.tmdb.org/t/p/w1280' + r.backdrop_path : null,
@@ -86,7 +90,6 @@ async function buscarTMDB(nomeOriginal, tipo) {
   return resultado;
 }
 
-/* Enriquece um card de filme/série com poster/ano do TMDB (sem bloquear a grade) */
 function enriquecerCard(card, item) {
   buscarTMDB(item.name, secaoAtual).then(info => {
     if (!info) return;
@@ -130,13 +133,14 @@ const SVG_FALLBACK = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
 );
 window.imgErro = el => { el.onerror = null; el.src = SVG_FALLBACK; };
 
-/* ---------------- API Xtream (via proxy do deploy) ---------------- */
+/* ---------------- PROXY (provedor tem Cloudflare: direto = 403) ---------------- */
 function montarUrlProxy(url) {
-  const host = location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     return 'http://localhost:8000/api/proxy?url=' + encodeURIComponent(url);
   }
-  return '/api/proxy?url=' + encodeURIComponent(url);
+  // Mesma origem do app: funciona tanto no Cloudflare Pages (produção)
+  // quanto em qualquer outro domínio onde o frontend for hospedado.
+  return location.origin + '/api/proxy?url=' + encodeURIComponent(url);
 }
 
 async function fetchAPI(action, params = '') {
@@ -145,6 +149,33 @@ async function fetchAPI(action, params = '') {
   const resp = await fetch(montarUrlProxy(alvo));
   if (!resp.ok) throw new Error('erro_rede');
   return resp.json();
+}
+
+/* ---------------- hls.js compartilhado ---------------- */
+const HLS_CONFIG = {
+  maxBufferLength: 60,
+  maxMaxBufferLength: 120,
+  liveSyncDurationCount: 5,
+  maxLiveSyncPlaybackRate: 1.3,
+  fragLoadingMaxRetry: 8,
+  manifestLoadingMaxRetry: 4,
+  levelLoadingMaxRetry: 4
+};
+
+function criarHls(videoEl, urlFinal, ehPrincipal) {
+  const inst = new Hls(HLS_CONFIG);
+  inst.loadSource(urlFinal);
+  inst.attachMedia(videoEl);
+  inst.on(Hls.Events.ERROR, (ev, data) => {
+    if (!data || !data.fatal) return;
+    try {
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) inst.startLoad();
+      else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) inst.recoverMediaError();
+      else if (ehPrincipal) mostrarErroPlayer();
+      else pararMini();
+    } catch (e) {}
+  });
+  return inst;
 }
 
 /* ---------------- CACHE DE CATÁLOGO ---------------- */
@@ -237,6 +268,7 @@ function mostrarTela(id) {
 
 function entrarNoMenu() {
   esconderLoader();
+  pararMini();
   secaoAtual = 'home';
   renderizarHome();
   mostrarTela('screen-home');
@@ -244,6 +276,7 @@ function entrarNoMenu() {
 }
 
 function irParaSecao(secao) {
+  pararMini();
   secaoAtual = secao;
   catAtual = null;
   termoBusca = '';
@@ -256,6 +289,7 @@ function irParaSecao(secao) {
 
 function voltarMenu() {
   forcarPararVideo();
+  pararMini();
   entrarNoMenu();
 }
 
@@ -475,10 +509,33 @@ function alternarFavorito(id, secao, cardEl) {
   if (mediaAtual && (mediaAtual.id === id)) atualizarBotaoFavDetail();
 }
 
-/* ---- Lista de canais ao vivo ---- */
+/* ============================================================
+   TV AO VIVO — lista, EPG e MINI PLAYER
+   ============================================================ */
 const epgFila = [];
 let epgRodando = 0;
 const EPG_MAX = 2;
+
+function pararMini() {
+  if (miniHls) { try { miniHls.destroy(); } catch (e) {} miniHls = null; }
+  const v = $('live-mini');
+  if (v) { v.pause(); v.removeAttribute('src'); try { v.load(); } catch (e) {} }
+  canalMini = null;
+}
+
+function tocarMini(url, dados) {
+  pararMini();
+  canalMini = dados;
+  const v = $('live-mini');
+  v.volume = 1;
+  const urlFinal = montarUrlProxy(url);
+  if (urlFinal.indexOf('.m3u8') !== -1 && window.Hls && Hls.isSupported()) {
+    miniHls = criarHls(v, urlFinal, false);
+  } else {
+    v.src = urlFinal;
+  }
+  v.play().catch(() => {});
+}
 
 function renderizarListaCanais(dados) {
   const container = $('items-container');
@@ -512,6 +569,12 @@ function renderizarListaCanais(dados) {
   container._obs.observe(sentinela);
 }
 
+function selecionarCanal(row, item) {
+  document.querySelectorAll('.canal-row.selected').forEach(r => r.classList.remove('selected'));
+  row.classList.add('selected');
+  assistirCanal(item);
+}
+
 function criarLinhaCanal(item) {
   const id = item.stream_id;
   const row = document.createElement('button');
@@ -520,13 +583,35 @@ function criarLinhaCanal(item) {
   const img = item.stream_icon || SVG_FALLBACK;
   row.innerHTML =
     '<img src="' + img + '" onerror="imgErro(this)" loading="lazy">' +
-    '<span class="canal-nome">' + escapar(item.name) + '</span>' +
-    '<span class="canal-prog" id="prog-' + id + '">Programação...</span>';
+    '<span class="canal-nome">' + escapar(item.name) + '</span>';
 
-  row.addEventListener('click', () => {
-    document.querySelectorAll('.canal-row.selected').forEach(r => r.classList.remove('selected'));
-    row.classList.add('selected');
-    assistirCanal(item);
+  // Clique do mouse = tocar no mini player
+  row.addEventListener('click', () => selecionarCanal(row, item));
+
+  // OK do controle: apertar rápido = assistir | SEGURAR (~0,7s) = favoritar
+  row.addEventListener('keydown', (e) => {
+    if (!ehTeclaOK(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.repeat || row._pressTimer) return;
+    row._longPress = false;
+    row._pressTimer = setTimeout(() => {
+      row._pressTimer = null;
+      row._longPress = true;
+      alternarFavorito(id, 'live', null);
+      const agoraFav = favoritos.live.includes(id);
+      toast(agoraFav ? '★ Adicionado aos favoritos' : 'Removido dos favoritos');
+    }, 700);
+  });
+  row.addEventListener('keyup', (e) => {
+    if (!ehTeclaOK(e)) return;
+    e.stopPropagation();
+    if (row._pressTimer) {
+      clearTimeout(row._pressTimer);
+      row._pressTimer = null;
+      selecionarCanal(row, item);
+    }
+    row._longPress = false;
   });
 
   row.addEventListener('focus', () => { agendarEpg(id, item.name); });
@@ -565,16 +650,10 @@ async function processarFilaEpg() {
         html += '<div class="epg-prog' + (i === 0 ? ' agora' : '') + '">' +
                 '<div class="epg-hora">' + ini + ' - ' + fim + (i === 0 ? ' • AGORA' : '') + '</div>' +
                 '<div>' + escapar(titulo) + '</div></div>';
-        if (i === 0) {
-          const mini = $('prog-' + pedido.id);
-          if (mini) mini.textContent = ini + ' ' + titulo;
-        }
       });
       caixa.innerHTML = html;
     } else {
       caixa.textContent = 'Programação indisponível.';
-      const mini = $('prog-' + pedido.id);
-      if (mini) mini.textContent = 'Programação indisponível';
     }
   } catch (e) {
     if ($('epg-canal').textContent === pedido.nome) $('epg-conteudo').textContent = 'Falha ao carregar programação.';
@@ -596,13 +675,15 @@ function urlCanal(item) {
   return url;
 }
 
+/* OK no canal = toca no MINI player (não abre tela cheia) */
 function assistirCanal(item) {
   const url = urlCanal(item);
-  abrirPlayer(url, { id: item.stream_id, name: item.name, url, aba: 'live', logo: item.stream_icon });
+  tocarMini(url, { id: item.stream_id, name: item.name, url: url, aba: 'live', logo: item.stream_icon });
+  toast(item.name);
 }
 
 /* ============================================================
-   TELA DE DETALHES (com backdrop/título/sinopse do TMDB)
+   TELA DE DETALHES
    ============================================================ */
 let episodiosFlat = [];
 let temporadaAtual = null;
@@ -732,7 +813,8 @@ function renderizarEpisodios(episodios) {
       '<div class="ep-info">' +
         '<div class="ep-titulo">E' + (ep.episode_num || '?') + ' — ' + escapar(nomeEp) + '</div>' +
         (ep.info && ep.info.duration ? '<div class="ep-sub">' + escapar(ep.info.duration) + '</div>' : '') +
-      '</div>';
+      '</div>' +
+      (assistido ? '<span class="ep-check">✓ 100% visto</span>' : '');
     linha.addEventListener('click', () => playEpisodio(ep));
     caixa.appendChild(linha);
   });
@@ -767,12 +849,50 @@ function voltarDoDetalhe() {
 }
 
 /* ============================================================
-   PLAYER
+   PLAYER (tela cheia)
    ============================================================ */
 function urlFilme(item) {
   const ext = item.container_extension || 'mp4';
   return credenciais.host + '/movie/' + credenciais.user + '/' + credenciais.pass +
          '/' + item.stream_id + '.' + ext;
+}
+
+let proximoEpTimer = null;
+let proximoEpRestante = 0;
+
+function mostrarCardProximoEp() {
+  if (!videoAtual || videoAtual.aba !== 'series') return;
+  const proximo = proximoEpisodioDisponivel();
+  if (!proximo) return;
+  if (!$('proximo-ep-card').classList.contains('hidden')) return;
+  const nomeEp = proximo.title ? decodificarEPG(proximo.title) : ('Episódio ' + (proximo.episode_num || ''));
+  const capa = (proximo.info && proximo.info.movie_image) ||
+               (mediaAtual && mediaAtual.dados.cover) || SVG_FALLBACK;
+  $('proximo-ep-img').src = capa;
+  $('proximo-ep-nome').textContent =
+    (mediaAtual ? mediaAtual.dados.name + ' — ' : '') +
+    'E' + (proximo.episode_num || '?') + ' ' + nomeEp;
+  proximoEpRestante = 8;
+  $('proximo-ep-count').textContent = proximoEpRestante;
+  $('proximo-ep-card').classList.remove('hidden');
+  clearInterval(proximoEpTimer);
+  proximoEpTimer = setInterval(() => {
+    proximoEpRestante--;
+    if (proximoEpRestante <= 0) {
+      clearInterval(proximoEpTimer);
+      proximoEpTimer = null;
+      tocarProximoEpisodio();
+    } else {
+      $('proximo-ep-count').textContent = proximoEpRestante;
+    }
+  }, 1000);
+}
+
+function esconderCardProximoEp() {
+  clearInterval(proximoEpTimer);
+  proximoEpTimer = null;
+  const card = $('proximo-ep-card');
+  if (card) card.classList.add('hidden');
 }
 
 function abrirPlayer(url, dados) {
@@ -783,14 +903,11 @@ function abrirPlayer(url, dados) {
 
   $('player-erro').classList.add('hidden');
   $('player-carregando').classList.remove('hidden');
-  $('btn-proximo-ep').classList.add('hidden');
+  esconderCardProximoEp();
 
   mostrarTela('screen-player');
-  video.focus();
-  video.volume = 1; // volume sempre no máximo; ajuste é feito na TV
+  video.volume = 1;
 
-  // TV ao vivo: NENHUM controle na tela
-  // Filmes/séries: barra customizada (play/pause, ±10s, progresso)
   if (dados.aba === 'live') $('player-controls').classList.add('hidden');
   else mostrarControles();
 
@@ -799,33 +916,8 @@ function abrirPlayer(url, dados) {
   const ehHls = urlFinal.indexOf('.m3u8') !== -1;
 
   if (ehHls && window.Hls && Hls.isSupported()) {
-    /* HLS via MSE (Chrome, Firefox, Tizen 3+): buffer grande faz o download
-       dos segmentos À FRENTE da reprodução, disfarçando a latência do proxy
-       (sem isso, o buffer esvazia a cada segmento e o vídeo fica passando
-       "uma imagem, depois outra"). */
-    hls = new Hls({
-      maxBufferLength: 60,
-      maxMaxBufferLength: 120,
-      liveSyncDurationCount: 5,
-      maxLiveSyncPlaybackRate: 1.3,
-      fragLoadingMaxRetry: 8,
-      manifestLoadingMaxRetry: 4,
-      levelLoadingMaxRetry: 4
-    });
-    hls.loadSource(urlFinal);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.ERROR, (evento, data) => {
-      if (!hls || !data.fatal) return;
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-        hls.startLoad();
-      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-        hls.recoverMediaError();
-      } else {
-        mostrarErroPlayer();
-      }
-    });
+    hls = criarHls(video, urlFinal, true);
   } else {
-    // Fallback: HLS nativo (Safari / algumas TVs) ou MP4 direto
     video.src = urlFinal;
   }
 
@@ -873,9 +965,11 @@ function registrarProgresso() {
 }
 
 function sairDoPlayer() {
+  const dados = videoAtual;
   registrarProgresso();
   forcarPararVideo();
   esconderControles();
+  esconderCardProximoEp();
   videoAtual = null;
   if (telaAntesDoPlayer === 'screen-detail') {
     mostrarTela('screen-detail');
@@ -883,6 +977,10 @@ function sairDoPlayer() {
   } else if (telaAntesDoPlayer === 'screen-browse') {
     mostrarTela('screen-browse');
     focarPrimeiro($('screen-browse'));
+    // Ao vivo: ao voltar da tela cheia, continua tocando no mini player
+    if (dados && dados.aba === 'live' && secaoAtual === 'live') {
+      tocarMini(dados.url, dados);
+    }
   } else {
     entrarNoMenu();
   }
@@ -904,12 +1002,6 @@ function proximoEpisodioDisponivel() {
   return null;
 }
 
-function mostrarBotaoProximoEp() {
-  const proximo = proximoEpisodioDisponivel();
-  if (!proximo) return;
-  $('btn-proximo-ep').classList.remove('hidden');
-}
-
 function tocarProximoEpisodio() {
   const proximo = proximoEpisodioDisponivel();
   if (proximo) playEpisodio(proximo);
@@ -928,10 +1020,8 @@ function toast(msg) {
    CONTROLES DO PLAYER (filmes/séries — nunca ao vivo)
    ============================================================ */
 function mostrarControles() {
-  // Ao vivo não tem barra de controle nunca
   if (!videoAtual || videoAtual.aba === 'live') return;
   $('player-controls').classList.remove('hidden');
-  // Esconde sozinha após 6s sem interação
   clearTimeout(controlesTimer);
   controlesTimer = setTimeout(() => $('player-controls').classList.add('hidden'), 6000);
 }
@@ -986,15 +1076,14 @@ function atualizarBarraControles() {
 }
 
 /* ============================================================
-   BUSCA — abre o teclado NATIVO da TV
-   (input focado; nenhum teclado virtual na tela)
+   BUSCA — teclado NATIVO da TV
    ============================================================ */
 function abrirBusca() {
   buscaAberta = true;
   $('search-bar').classList.remove('hidden');
   const input = $('search-input');
   input.value = termoBusca;
-  input.focus(); // <- a TV abre o IME/teclado nativo aqui
+  input.focus();
 }
 
 function fecharBusca(silencioso) {
@@ -1028,12 +1117,13 @@ function fazerLogout() {
   cats = { live: [], vod: [], series: [] };
   dataLoaded = false;
   forcarPararVideo();
+  pararMini();
   mostrarTela('screen-login');
   focarPrimeiro($('screen-login'));
 }
 
 /* ============================================================
-   NAVEGAÇÃO POR CONTROLE REMOTO / TECLADO
+   NAVEGAÇÃO POR CONTROLE REMOTO
    ============================================================ */
 function focavel(el) {
   if (!el || el.disabled) return false;
@@ -1043,9 +1133,9 @@ function focavel(el) {
 
 function focarPrimeiro(tela) {
   if (!tela) return;
-  const alvo = tela.querySelector('button, input, li[tabindex]');
+  const alvo = tela.querySelector('button, input, [tabindex]');
   if (alvo && focavel(alvo)) { alvo.focus(); return; }
-  const todos = tela.querySelectorAll('button, input, li[tabindex]');
+  const todos = tela.querySelectorAll('button, input, [tabindex]');
   for (const el of todos) {
     if (focavel(el)) { el.focus(); return; }
   }
@@ -1063,10 +1153,9 @@ function moverFoco(direcao) {
     if (tela) focarPrimeiro(tela);
     return;
   }
-  // Se estiver digitando na busca, as setas ficam com o IME da TV
   if (ativo.tagName === 'INPUT' && buscaAberta) return;
 
-  const todos = Array.from(document.querySelectorAll('.screen.active button, .screen.active input, .screen.active li[tabindex]')).filter(focavel);
+  const todos = Array.from(document.querySelectorAll('.screen.active button, .screen.active input, .screen.active [tabindex]')).filter(focavel);
   if (todos.length === 0) return;
   const rA = ativo.getBoundingClientRect();
   const cxA = rA.left + rA.width / 2, cyA = rA.top + rA.height / 2;
@@ -1097,52 +1186,91 @@ function acaoVoltar() {
 }
 
 document.addEventListener('keydown', (e) => {
-  // Voltar (Tizen = 10009, webOS = 461, navegador = Escape/Backspace)
-  if (e.keyCode === 10009 || e.keyCode === 461 || e.key === 'Escape' ||
+  // Voltar (webOS = 461, Tizen = 10009, navegador = Escape/Backspace)
+  if (e.keyCode === 461 || e.keyCode === 10009 || e.key === 'Escape' ||
+      e.key === 'GoBack' || e.key === 'XF86Back' ||
       (e.key === 'Backspace' && !buscaAberta)) {
     e.preventDefault();
     acaoVoltar();
     return;
   }
 
-  // Enquanto a busca está aberta e o input focado, Enter confirma e fecha o teclado
+  // Busca aberta com input focado: OK confirma; demais teclas vão pro IME nativo
   if (buscaAberta && document.activeElement === $('search-input')) {
-    if (e.key === 'Enter' || e.keyCode === 13) {
+    if (ehTeclaOK(e)) {
       e.preventDefault();
       fecharBusca();
     }
-    return; // demais teclas vão para o IME nativo da TV
+    return;
   }
-
-  const mapa = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
 
   // ---- DENTRO DO PLAYER ----
   if ($('screen-player').classList.contains('active')) {
+    const mapaPlayer = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+
+    // Tela de ERRO: setas navegam entre "Tentar novamente" e "Voltar"
+    if (!$('player-erro').classList.contains('hidden')) {
+      e.preventDefault();
+      if (mapaPlayer[e.key]) moverFoco(mapaPlayer[e.key]);
+      else if (ehTeclaOK(e) && document.activeElement && document.activeElement.click) {
+        document.activeElement.click();
+      }
+      return;
+    }
+
     const ehVod = videoAtual && videoAtual.aba !== 'live';
-    // Ao vivo: setas/OK não fazem NADA (só assiste; Voltar sai)
-    if (!ehVod) return;
+    if (!ehVod) return; // ao vivo: só assiste; Voltar sai
     e.preventDefault();
+
+    // Card "próximo episódio": CIMA foca nele (OK toca na hora), BAIXO volta pro vídeo
+    const pec = $('proximo-ep-card');
+    if (pec && !pec.classList.contains('hidden')) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (document.activeElement === pec) {
+          pec.blur();
+        } else {
+          pec.focus();
+        }
+        return;
+      }
+      if (document.activeElement === pec && ehTeclaOK(e)) {
+        pec.click();
+        return;
+      }
+    }
+
     mostrarControles();
-    if (e.key === 'Enter' || e.keyCode === 13) alternarPlayPause();
+    if (ehTeclaOK(e)) {
+      if (document.activeElement && document.activeElement.tagName === 'BUTTON' &&
+          document.activeElement.classList.contains('pc-btn')) {
+        document.activeElement.click();
+      } else {
+        alternarPlayPause();
+      }
+    }
     else if (e.key === 'ArrowLeft') voltar10();
     else if (e.key === 'ArrowRight') avancar10();
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      if ($('player-controls').classList.contains('hidden')) mostrarControles();
-      else esconderControles();
-    }
     return;
   }
 
+  // ---- OK / ENTER (botão do meio do controle): aciona o elemento focado ----
+  if (ehTeclaOK(e)) {
+    e.preventDefault();
+    let alvo = document.activeElement;
+    if (!alvo || alvo === document.body || typeof alvo.click !== 'function') {
+      const tela = document.querySelector('.screen.active');
+      if (tela) focarPrimeiro(tela);
+      alvo = document.activeElement;
+    }
+    if (alvo && typeof alvo.click === 'function') alvo.click();
+    return;
+  }
+
+  // ---- SETAS: navegação espacial ----
+  const mapa = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
   if (mapa[e.key]) {
     e.preventDefault();
     moverFoco(mapa[e.key]);
-    return;
-  }
-
-  if (e.key === 'Enter') {
-    if (document.activeElement && document.activeElement.click) {
-      document.activeElement.click();
-    }
   }
 });
 
@@ -1159,8 +1287,8 @@ function fazerLogin() {
     $('login-erro').textContent = 'Preencha DNS, usuário e senha.';
     return;
   }
-  if (!/^https?:\/\//i.test(dns)) dns = 'http://' + dns;
-  dns = dns.replace(/\/+$/, '');
+  dns = dns.replace(/^https?:\/\//i, '');   // evita http:// duplicado se colar
+  dns = 'http://' + dns.replace(/\/+$/, '');
 
   credenciais.host = dns;
   credenciais.user = user;
@@ -1177,7 +1305,7 @@ function iniciar() {
   // Login
   $('btn-login').addEventListener('click', fazerLogin);
   [$('login-dns'), $('login-user'), $('login-pass')].forEach(inp => {
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') fazerLogin(); });
+    inp.addEventListener('keydown', (e) => { if (ehTeclaOK(e)) fazerLogin(); });
   });
 
   // Menu
@@ -1190,12 +1318,21 @@ function iniciar() {
   $('btn-voltar-menu').addEventListener('click', voltarMenu);
   $('btn-buscar').addEventListener('click', abrirBusca);
   $('btn-search-close').addEventListener('click', () => fecharBusca());
-
-  // Busca: digitação abre o teclado nativo; o filtro aplica em tempo real
   $('search-input').addEventListener('input', (e) => {
     termoBusca = e.target.value.trim();
     aplicarFiltro();
   });
+
+  // Mini player: OK (ou clique) = tela cheia
+  const miniWrap = $('live-mini-wrap');
+  if (miniWrap) {
+    miniWrap.addEventListener('click', () => {
+      if (!canalMini) return;
+      const dados = canalMini;
+      pararMini();
+      abrirPlayer(dados.url, dados);
+    });
+  }
 
   // Settings
   $('btn-atualizar-catalogo').addEventListener('click', atualizarCatalogo);
@@ -1232,8 +1369,8 @@ function iniciar() {
     if (videoAtual) abrirPlayer(videoAtual.url, videoAtual);
   });
   $('btn-voltar-player').addEventListener('click', sairDoPlayer);
-  $('btn-proximo-ep').addEventListener('click', tocarProximoEpisodio);
-  // Controles customizados (filmes/séries)
+  const cardProximo = $('proximo-ep-card');
+  if (cardProximo) cardProximo.addEventListener('click', tocarProximoEpisodio);
   $('btn-playpause').addEventListener('click', alternarPlayPause);
   $('btn-rew').addEventListener('click', voltar10);
   $('btn-fwd').addEventListener('click', avancar10);
@@ -1251,6 +1388,11 @@ function iniciar() {
   video.addEventListener('timeupdate', () => {
     atualizarBarraControles();
     if (video.duration && video.currentTime > 5) registrarProgresso();
+    // Últimos 10s de um episódio: mostra o card de próximo com contagem
+    if (videoAtual && videoAtual.aba === 'series' && video.duration && isFinite(video.duration)) {
+      const restante = video.duration - video.currentTime;
+      if (restante > 0 && restante <= 10) mostrarCardProximoEp();
+    }
   });
   video.addEventListener('play', () => {
     $('icon-play').classList.add('hidden');
@@ -1261,7 +1403,6 @@ function iniciar() {
     $('icon-pause').classList.add('hidden');
   });
   video.addEventListener('click', () => {
-    // clique/toque: alterna a barra (somente filmes/séries)
     if (videoAtual && videoAtual.aba !== 'live') {
       if ($('player-controls').classList.contains('hidden')) mostrarControles();
       else esconderControles();
@@ -1270,11 +1411,9 @@ function iniciar() {
   video.addEventListener('ended', () => {
     registrarProgresso();
     if (videoAtual && videoAtual.aba === 'series') {
-      const proximo = proximoEpisodioDisponivel();
-      if (proximo) {
-        mostrarBotaoProximoEp();
+      if (proximoEpisodioDisponivel()) {
         toast('Episódio finalizado');
-        setTimeout(() => { if (videoAtual) tocarProximoEpisodio(); }, 4000);
+        mostrarCardProximoEp();
       } else {
         toast('Fim da série');
       }

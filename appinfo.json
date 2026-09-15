@@ -1,11 +1,11 @@
 {
-    "id": "com.meuiptv.app",
-    "version": "1.0.0",
-    "vendor": "Seu Nome",
-    "type": "web",
-    "main": "index.html",
-    "title": "Meu IPTV",
-    "icon": "icon.png",
-    "resolution": "1920x1080",
-    "bgColor": "#09090b"
+  "id": "com.seunome.meuiptv",
+  "version": "1.0.0",
+  "vendor": "seunome",
+  "type": "web",
+  "main": "index.html",
+  "title": "Meu IPTV",
+  "icon": "icon.png",
+  "largeIcon": "icon.png",
+  "disableBackHistoryAPI": true
 }

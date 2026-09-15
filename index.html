@@ -28,7 +28,10 @@
       <p class="login-sub">Conecte-se com as credenciais do seu provedor</p>
       <div class="field">
         <label for="login-dns">DNS do provedor</label>
-        <input id="login-dns" class="input" type="text" placeholder="ex: provedor.com" autocomplete="off">
+        <div class="input input-prefix">
+          <span class="prefix">http://</span>
+          <input id="login-dns" type="text" placeholder="provedor.com" autocomplete="off" spellcheck="false">
+        </div>
       </div>
       <div class="field">
         <label for="login-user">Usuário</label>
@@ -119,6 +122,11 @@
       </div>
 
       <aside id="epg-panel" class="epg-panel hidden">
+        <!-- MINI PLAYER: OK aqui = tela cheia -->
+        <div id="live-mini-wrap" class="live-mini-wrap" tabindex="0" title="Tela cheia (OK)">
+          <video id="live-mini" playsinline></video>
+          <span class="live-mini-label">AO VIVO</span>
+        </div>
         <h3 id="epg-canal">Canal</h3>
         <div id="epg-conteudo">Passe o foco sobre um canal para ver a programação.</div>
       </aside>
@@ -155,7 +163,7 @@
     </div>
   </section>
 
-  <!-- ===================== PLAYER ===================== -->
+  <!-- ===================== PLAYER (tela cheia) ===================== -->
   <section id="screen-player" class="screen">
     <!-- SEM controls nativo: barra customizada (só para filmes/séries) -->
     <video id="video" playsinline></video>
@@ -189,7 +197,16 @@
         <button id="btn-voltar-player" class="btn btn-ghost">Voltar</button>
       </div>
     </div>
-    <button id="btn-proximo-ep" class="btn btn-primary btn-proximo-ep hidden">Próximo Episódio</button>
+
+    <!-- Card "Próximo Episódio": capa + nome + contagem regressiva (canto inferior direito) -->
+    <button id="proximo-ep-card" class="proximo-ep-card hidden">
+      <img id="proximo-ep-img" src="" alt="" onerror="imgErro(this)">
+      <span class="pec-info">
+        <span class="pec-label">PRÓXIMO EP EM <b id="proximo-ep-count">8</b>s ▲</span>
+        <span class="pec-nome" id="proximo-ep-nome"></span>
+      </span>
+    </button>
+
     <div id="player-toast" class="player-toast"></div>
   </section>
 
@@ -214,8 +231,7 @@
   </div>
 
   <!-- hls.js: reprodução HLS estável (transmissões ao vivo) em navegadores com MSE.
-       Remove o travamento "imagem a imagem" — baixa segmentos com buffer grande,
-       disfarçando a latência do proxy da Vercel. -->
+       Buffer grande disfarça a latência do proxy da Vercel. -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
   <script src="js/app.js"></script>
 </body>
